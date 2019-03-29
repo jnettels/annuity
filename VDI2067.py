@@ -17,7 +17,15 @@ using the annuity method defined in the German VDI 2067.
 
 Notes
 -----
-There are two main use cases for defining an energy system and its components:
+The basic usage consists of two main steps:
+
+* Define an energy system ``sys`` with its components (called parts here)
+
+* Call ``sys.calc_annuities()`` to receive the annuities. Afterwards, you
+  may also call ``sys.pprint_parts()`` and ``sys.pprint_annuities()``,
+  which are convenient pretty-print functions to view the results.
+
+There are two main ways for adding parts to an energy system:
 
 * Manually input each part with its purchase price, service life and
   factors for effort for maintenance, etc. Please refer to the main method
@@ -27,6 +35,26 @@ There are two main use cases for defining an energy system and its components:
 * Select the parts from a database that contains all the properties. Here
   the only required inputs are name and size of a part (e.g. installed kW
   or kWh), all other information are derived from the database.
+
+Deviations from the official calculations in VDI 2067:
+
+* If the service life of a part is ``T_N = 0``, the number of replacements
+  is set to ``n = 0``. This applies to e.g. 'planning'. This approach leads
+  to the correct results in the VDI 2067 example, but is not precisely
+  documented.
+
+* VDI 2067 demands an observation period ``T > 0``, for which the annuity
+  factor is calculated. In addition to that, this implementation supports
+  a 'simplified' calculation with ``T = 0``, where the annuity factor for
+  each part is calculated with its service life ``T_N``.
+
+* This implementation includes the concept of funding, which is not part
+  of VDI 2067. For each added ``part``, the optional parameter ``fund``
+  can be given. The investment amout of the first year is reduced by that
+  factor (``fund=0`` equals no funding, ``fund=1`` equals 100% funding).
+  Investment for all following replacements are not affected, they have to
+  be paid in full. This does also not affect the operation-related costs.
+  They are always calculated with the original investment amount ``A_0``.
 
 """
 
@@ -69,7 +97,7 @@ def main_VDI_example():
     sys.add_part('circulator pump', 286, 10, 0.03, 0, 0)
     sys.add_part('manual control', 50, 20, 0.025, 0, 0)
     sys.add_part('wall', 616, 40, 0, 0, 0)
-    sys.add_part('planing', 500, 0, 0, 0, 0)  # service life = 0 years
+    sys.add_part('planning', 500, 0, 0, 0, 0)  # service life = 0 years
     sys.add_part('radiators', 7551, 30, 0.01, 0, 0)
     sys.add_part('tank', 950, 25, 0.015, 0, 0)
     sys.add_part('smokestack', 2500, 50, 0.03, 0, 0)
@@ -93,7 +121,7 @@ def main_VDI_example():
 
     sys.pprint_parts()  # pretty-print a list of all parts of the system
     sys.pprint_annuities()  # pretty-print the annuities
-    A_VDI_example = -5633.44  # Result of total annuity in example
+    A_VDI_example = -5633.44  # Result of total annuity in official example
     diff = A.sum() - A_VDI_example
     print('Difference to VDI Example:', round(diff, 2), '€ (',
           round(diff/A_VDI_example*100), '%)')
@@ -115,7 +143,6 @@ def main_database_example():
 
     fund = 0.5  # factor for funding
     sys.add_part_db('Photovoltaik', 'Dach', 'komplett', 5500)
-#    sys.add_part_db('Photovoltaik', 'Dach', 'komplett', 5500)
     sys.add_part_db('Heizzentrale', 'futureSuN', 'komplett', 1, fund=fund)
     sys.add_part_db('Langzeitwärmespeicher', 'Behälter', 'komplett', 30900,
                     fund=fund)
@@ -128,30 +155,25 @@ def main_database_example():
     sys.add_part_db('Wärmenetz', 'Fernwärme', 'Hausübergabestationen', 131)
 
     # For planning, 2% of the total investment cost is used
-    sys.add_part('Planung', sys.calc_investment()*0.02, 0, 0, 0, 0)
+    invest = sys.calc_investment()
+    sys.add_part('Planung', invest*0.15, 0, 0, 0, 0)
+    sys.add_part('Sonstiges', invest*0.10, 0, 0, 0, 0)
 
-
-#    df_V1 = pd.DataFrame(
-#            {'Q': [6915, 3954, 92, ],
-#             'price': [20, 20, 237, ]})
     df_V1 = pd.DataFrame(
-            {'Q': [6915, 3954, 92, 665, 1059],
-             'price': [20, 20, 237, 200, 3]})
+            {'Q': [5410.9, 3954.4, 92],
+             'price': [20, 30, 237.4]})
     df_E1 = pd.DataFrame(
             {'Q': [494, 1811, 8098, 3954, 1852],
              'price': [100, 146, 60, 30, 220]})
 
     # Calculate the annuity of the energy system
     q = 1.03  # interest factor
-    T = 50  # observation period
+    T = 20  # observation period
     A = sys.calc_annuities(T=T, q=q,
-                           r_all=1,
+#                           r_all=1,
                            df_V1=df_V1,
                            df_E1=df_E1,
                            )  # Get Series of annuities
-#    df_parts = sys.list_parts()  # Get DataFrame with all parts
-#    print(df_parts)
-#    print(df_parts.sum())
 
     sys.pprint_parts()  # convenience function
     sys.pprint_annuities()  # convenience function
@@ -233,7 +255,8 @@ class system():
     def add_part(self, name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=0):
         '''
         Create a new object of the class ``part`` and add it to the list
-        of parts contained in the energy system.
+        of parts contained in the energy system. The concept of funding
+        (``fund``) is not part of the VDI 2067.
 
         Args:
 
@@ -248,6 +271,9 @@ class system():
             f_W_Insp (float): Factor for effort for servicing and inspection
 
             f_Op (float): Factor for effort for operation [h/a]
+
+            fund (float): Factor for funding of investment amount in first
+            year (``fund=0``: no funding, ``fund=1``: 100% funding)
 
         Returns:
             None
@@ -305,7 +331,8 @@ class system():
 
             r_* (float): price change factors (Preisänderungsfaktor)
 
-            r_all (float): overwrite all other r_* values at once
+            r_all (float): overwrite all other r_* values at once. Set to
+            ``None`` or a negative value to ignore.
 
             df_V1 (Pandas DataFrame): DataFrame consisting of two columns
             (e.g. energy and price) that will be multiplied to calculate the
@@ -321,7 +348,8 @@ class system():
             A (Pandas Series): Series of all annuities
         '''
         if r_all is not None:  # Overwrite all other r_* values at once
-            r_K = r_V = r_B = r_S = r_I = r_E = r_all
+            if r_all >= 0:
+                r_K = r_V = r_B = r_S = r_I = r_E = r_all
 
         # Calculate capital and operation annuities for all components (parts)
         for part in self.parts:
@@ -383,7 +411,6 @@ class system():
         Returns:
             A_N_V (float): annuity of the demand-related costs
         '''
-        a = (q-1) / (1-pow(q, -T))  # annuity factor
 
         # Multiply all elements of first and second column
         costs = df_V1.iloc[:, 0] * df_V1.iloc[:, 1]
@@ -391,11 +418,16 @@ class system():
         A_V1 = costs.sum()
 #        print('A_V1', A_V1)
 
-        # price dynamic cash value factor for demand-related costs
-        b_V = calc_cash_value_factor(T, r, q)
-#        print('b_V', b_V)
+        if T > 0:  # Official calculation
+            # price dynamic cash value factor for demand-related costs
+            a = calc_annuity_factor(T, q)  # annuity factor
+            b_V = calc_cash_value_factor(T, r, q)
+#            print('b_V', b_V)
+            A_N_V = A_V1 * a * b_V  # annuity of the demand-related costs
 
-        A_N_V = A_V1 * a * b_V  # annuity of the demand-related costs
+        else:  # Calculation without observation period (Not part of VDI 2067!)
+            A_N_V = A_V1
+
         return A_N_V
 
     def calc_annuity_other_costs(self, T, q, r, A_S1=0):
@@ -414,10 +446,15 @@ class system():
         Returns:
             A_N_S (float): annuity of other costs
         '''
-        a = (q-1) / (1-pow(q, -T))  # annuity factor
-        # price dynamic cash value factor for other costs
-        b_S = calc_cash_value_factor(T, r, q)
-        A_N_S = A_S1 * a * b_S  # annuity of other costs
+        if T > 0:  # Official calculation
+            a = calc_annuity_factor(T, q)  # annuity factor
+            # price dynamic cash value factor for other costs
+            b_S = calc_cash_value_factor(T, r, q)
+            A_N_S = A_S1 * a * b_S  # annuity of other costs
+
+        else:  # Calculation without observation period (Not part of VDI 2067!)
+            A_N_S = A_S1
+
         return A_N_S
 
     def calc_annuity_proceeds(self, T, q, r, df_E1=None):
@@ -442,7 +479,6 @@ class system():
         Returns:
             A_N_E (float): annuity of the proceeds
         '''
-        a = (q-1) / (1-pow(q, -T))  # annuity factor
 
         if df_E1 is not None:
             # Multiply all elements of first and second column
@@ -452,9 +488,14 @@ class system():
         else:
             E_1 = 0
 
-        # price dynamic cash value factor for proceeds
-        b_E = calc_cash_value_factor(T, r, q)
-        A_N_E = E_1 * a * b_E  # annuity of the proceeds
+        if T > 0:  # Official calculation
+            a = calc_annuity_factor(T, q)  # annuity factor
+            # price dynamic cash value factor for proceeds
+            b_E = calc_cash_value_factor(T, r, q)
+            A_N_E = E_1 * a * b_E  # annuity of the proceeds
+
+        else:  # Calculation without observation period (Not part of VDI 2067!)
+            A_N_E = E_1
 
         return A_N_E
 
@@ -484,6 +525,8 @@ class system():
         pd.reset_option('precision')  # ...and reset the setting from above
         pd.reset_option('display.float_format')
 
+        return df_parts
+
     def pprint_annuities(self):
         '''
         Convenience function for pretty-printing the calculated annuities
@@ -508,6 +551,8 @@ class system():
         print('-----------------------------------------')
         pd.reset_option('precision')  # ...and reset the setting from above
         pd.reset_option('display.float_format')
+
+        return pp_A
 
 
 class part():
@@ -558,7 +603,11 @@ class part():
         Returns:
             None
         '''
-        a = (q-1) / (1-pow(q, -T))  # annuity factor
+        if T <= 0:  # Calc without observation period (Not part of VDI 2067!)
+            T = self.T_N  # Calculate each part with its own service life time
+
+        # Calculation as defined in VDI 2067:
+        a = calc_annuity_factor(T, q)  # annuity factor
 
         # number of replacements procured within the observation period
         if self.T_N == 0:
@@ -586,7 +635,8 @@ class part():
         if self.fund > 0:
             # Investment amout of first year is reduced by factor for funding
             A[0] = A[0]*(1 - self.fund)
-            # Note: the original investment 'self.A_0' is not changed
+            # Note: The original investment 'self.A_0' is not changed, so as to
+            # not affect the calculation of operation-related costs
 
         A_N_K = (sum(A) - R_W) * a  # annuity of the capital-related costs
 
@@ -611,7 +661,10 @@ class part():
         Returns:
             None
         '''
-        a = (q-1) / (1-pow(q, -T))  # annuity factor
+        if T <= 0:  # Not part of VDI 2067!
+            T = self.T_N  # Calculate each part with its own service life time
+
+        a = calc_annuity_factor(T, q)  # annuity factor
 
         # operation-related costs in first year for maintenance
         A_IN = self.A_0 * (self.f_Inst + self.f_W_Insp)
@@ -631,6 +684,29 @@ class part():
 #        self.A_IN_1 = A_IN * b_IN
 #        self.A_IN_2 = A_IN * b_IN * a
         self.A_N_B = A_N_B
+
+
+def calc_annuity_factor(T, q):
+    '''Calculation of annuity factor ``a``.
+
+    VDI 2067, section 8.1.1, equation (4)
+
+    Args:
+        T (int): observation period (in years) (Nutzungsdauer)
+
+        q (float): interest factor (Zinsfaktor)
+
+    Returns:
+        a (float): annuity factor
+
+    '''
+    try:
+        a = (q-1) / (1-pow(q, -T))  # annuity factor
+    except ZeroDivisionError:
+        raise ValueError('Cannot calculate annuity factor from observation '
+                         'period T=' + str(T) + ' years and interest factor q='
+                         + str(q))
+    return a
 
 
 def calc_cash_value_factor(T, r, q):
@@ -657,5 +733,8 @@ def calc_cash_value_factor(T, r, q):
 
 
 if __name__ == "__main__":
+    '''If this imported as a module, this part will be skipped.
+    If this script is executed directly, we call our main method from here.
+    '''
     main_VDI_example()
 #    main_database_example()
