@@ -30,7 +30,9 @@ from distutils.core import setup
 
 setup(name='VDI2067',
       version='0.1.0',
-      description='VDI 2067: Economic efficiency of building installations',
+      description='VDI 2067: Calculation of economic efficiency using the annuity method',
       author='Joris Nettelstroth',
+      author_email='joris.nettelstroth@stw.de',
+      url='https://github.com/jnettels/VDI2067',
       py_modules=['VDI2067'],
       )
