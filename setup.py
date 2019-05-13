@@ -26,11 +26,12 @@ You can then import the module with:
 
 """
 
-from distutils.core import setup
+from setuptools import setup
 
 setup(name='VDI2067',
       version='0.1.0',
       description='VDI 2067: Calculation of economic efficiency using the annuity method',
+      long_description=open('README.md').read(),
       author='Joris Nettelstroth',
       author_email='joris.nettelstroth@stw.de',
       url='https://github.com/jnettels/VDI2067',
