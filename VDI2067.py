@@ -207,7 +207,7 @@ class system():
     def __init__(self):
         self.cost_db = None  # Cost database; set by load_cost_db()
         self.factors = None  # Constant factors; set by load_cost_db()
-        self.parts = []
+        self.parts = []  # List of part objects in system; set by add_parts()
         self.A = None  # Total annuity of the system; set by calc_annuities()
 
     def load_cost_db(self, path=r'Kostendatenbank.xlsx'):
@@ -239,8 +239,9 @@ class system():
         try:
             df = self.cost_db.loc[part_tuple]
         except pd.core.indexing.IndexingError:
-            print(self.cost_db)
-            raise pd.core.indexing.IndexingError(
+            if logger.isEnabledFor(logging.DEBUG):
+                print(self.cost_db)
+            raise IndexError(
                     str(part_tuple) + ' not found in index of database')
 
         a = df['Reg. Faktor']
@@ -266,9 +267,11 @@ class system():
         f_Inst = df['Instandsetzung']  # Effort for maintenance
         f_W_Insp = df['Wartung']  # Effort for servicing and inspection
 
-        self.add_part(part_tuple, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=fund)
+        self.add_part(part_tuple, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=fund,
+                      size=(size, df['Bezugseinheit']))
 
-    def add_part(self, name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=0):
+    def add_part(self, name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=0,
+                 size=None):
         '''
         Create a new object of the class ``part`` and add it to the list
         of parts contained in the energy system. The concept of funding
@@ -291,10 +294,14 @@ class system():
             fund (float): Factor for funding of investment amount in first
             year (``fund=0``: no funding, ``fund=1``: 100% funding)
 
+            size (tuple): Size of the part when loaded from
+            database (optional). Default = None.
+
         Returns:
             None
         '''
-        new_part = part(name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=fund)
+        new_part = part(name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=fund,
+                        size=size)
         self.parts.append(new_part)
 
     def list_parts(self):
@@ -428,23 +435,19 @@ class system():
             A_N_V (float): annuity of the demand-related costs
         '''
 
-        # Multiply all elements of first and second column
-        costs = df_V1.iloc[:, 0] * df_V1.iloc[:, 1]
-        # demand-related costs in the first year
-        A_V1 = costs.sum()
-#        print('A_V1', A_V1)
-
         if T > 0:  # Official calculation
             # price dynamic cash value factor for demand-related costs
             a = calc_annuity_factor(T, q)  # annuity factor
             b_V = calc_cash_value_factor(T, r, q)
-#            print('b_V', b_V)
-            A_N_V = A_V1 * a * b_V  # annuity of the demand-related costs
 
         else:  # Calculation without observation period (Not part of VDI 2067!)
-            A_N_V = A_V1
+            a = b_V = 1
 
-        return A_N_V
+        A_V1 = df_V1.prod(axis=1)  # Multiply columns row-wise
+        self.df_A_N_V = A_V1 * a * b_V  # apply price changes
+        A_N_V = self.df_A_N_V.sum()  # Sum up to a single value
+
+        return A_N_V  # annuity of the demand-related costs
 
     def calc_annuity_other_costs(self, T, q, r, A_S1=0):
         '''
@@ -496,24 +499,24 @@ class system():
             A_N_E (float): annuity of the proceeds
         '''
 
-        if df_E1 is not None:
-            # Multiply all elements of first and second column
-            costs = df_E1.iloc[:, 0] * df_E1.iloc[:, 1]
-            # proceeds in the first year
-            E_1 = costs.sum()
-        else:
-            E_1 = 0
-
         if T > 0:  # Official calculation
             a = calc_annuity_factor(T, q)  # annuity factor
             # price dynamic cash value factor for proceeds
             b_E = calc_cash_value_factor(T, r, q)
-            A_N_E = E_1 * a * b_E  # annuity of the proceeds
 
         else:  # Calculation without observation period (Not part of VDI 2067!)
-            A_N_E = E_1
+            a = b_E = 1
 
-        return A_N_E
+        if df_E1 is not None:
+            # Multiply columns row-wise to get the proceeds in the first year
+            E1 = df_E1.prod(axis=1)
+            self.df_A_N_E = E1 * a * b_E  # apply price changes
+        else:
+            self.df_A_N_E = pd.Series()
+
+        A_N_E = self.df_A_N_E.sum()  # Sum up to a single value
+
+        return A_N_E  # annuity of the proceeds
 
     def pprint_parts(self):
         '''
@@ -576,8 +579,10 @@ class part():
     properties of the component and can calculate its own capital-related
     costs and operation-related costs.
     '''
-    def __init__(self, name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=0):
-        self.name = name
+    def __init__(self, name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=0,
+                 size=None):
+        self.name = name  # Name of the component
+        self.size = size  # Size of the part when loaded from database
         self.A_0 = A_0  # Investment amount [€]
         self.T_N = T_N  # service life (in years)
         self.f_Inst = f_Inst  # Effort for maintenance
