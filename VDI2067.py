@@ -185,11 +185,11 @@ def main_database_example():
     # Calculate the annuity of the energy system
     q = 1.03  # interest factor
     T = 20  # observation period
-    A = sys.calc_annuities(T=T, q=q,
-#                           r_all=1,
-                           df_V1=df_V1,
-                           df_E1=df_E1,
-                           )  # Get Series of annuities
+    sys.calc_annuities(T=T, q=q,
+                       # r_all=1,
+                       df_V1=df_V1,
+                       df_E1=df_E1,
+                       )  # Get Series of annuities
 
     sys.pprint_parts()  # convenience function
     sys.pprint_annuities()  # convenience function
@@ -309,10 +309,18 @@ class system():
         the energy system into one DataFrame
         '''
         s_list = []
-        for part in self.parts:
-            s = pd.Series(part.__dict__)
+        for part_ in self.parts:
+            s = pd.Series(part_.__dict__)
             s_list.append(s)
-        df = pd.concat(s_list, axis=1).T
+
+        if len(s_list) > 0:  # Normal use (the system contains parts)
+            df = pd.concat(s_list, axis=1).T
+
+        else:  # No parts: Create an empty DataFrame with the correct columns
+            fake_part = part('Empty', 0, 0, 0, 0, 0, 0)  # create empty part
+            df = pd.concat([pd.Series(fake_part.__dict__)], axis=1).T
+            df.drop(0, inplace=True)  # Remove the row
+
         df.set_index(keys='name', append=True, inplace=True)
         return df
 
