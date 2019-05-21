@@ -519,27 +519,22 @@ class system():
         return A_N_E  # annuity of the proceeds
 
     def pprint_parts(self):
-        '''
-        Convenience function for pretty-printing the properties of all parts
+        '''Convenience function for pretty-printing the properties of all parts
         to the console.
         '''
-        import locale
-        locale.setlocale(locale.LC_ALL, '')  # Use space as thousands separator
-        f_space = lambda x: locale.format_string('%14.2f', x, grouping=True)
-
         df_parts = self.list_parts()  # Get DataFrame with all parts
 
         A = self.calc_investment()
         A_funding = self.calc_investment(include_funding=True)
 
         pd.set_option('precision', 2)  # Set the number of decimal points
-        pd.set_option('display.float_format', f_space)
+        pd.set_option('display.float_format', self.f_space)
         print('------------- List of parts -------------')
         print(df_parts.to_string())
         print('-----------------------------------------')
-        print('Total investment costs:   ', f_space(A))
+        print('Total investment costs:   ', self.f_space(A))
         if A != A_funding:
-            print('Investment after funding: ', f_space(A_funding))
+            print('Investment after funding: ', self.f_space(A_funding))
         print('-----------------------------------------')
         pd.reset_option('precision')  # ...and reset the setting from above
         pd.reset_option('display.float_format')
@@ -547,14 +542,9 @@ class system():
         return df_parts
 
     def pprint_annuities(self):
-        '''
-        Convenience function for pretty-printing the calculated annuities
+        '''Convenience function for pretty-printing the calculated annuities
         to the console.
         '''
-        import locale
-        locale.setlocale(locale.LC_ALL, '')  # Use space as thousands separator
-        f_space = lambda x: locale.format_string('%14.2f', x, grouping=True)
-
         pp_A = self.A.rename(index={'A_N_K': 'Capital-related costs:',
                                     'A_N_B': 'Operation-related costs:',
                                     'A_N_V': 'Demand-related costs:',
@@ -562,16 +552,22 @@ class system():
                                     'A_N_E': 'Proceeds:', })
 
         pd.set_option('precision', 2)  # Set the number of decimal points
-        pd.set_option('display.float_format', f_space)
+        pd.set_option('display.float_format', self.f_space)
         print('--------------- Annuities ---------------')
         print(pp_A.to_string())
         print('-----------------------------------------')
-        print('Total annuity:            ', f_space(pp_A.sum()))
+        print('Total annuity:            ', self.f_space(pp_A.sum()))
         print('-----------------------------------------')
         pd.reset_option('precision')  # ...and reset the setting from above
         pd.reset_option('display.float_format')
 
         return pp_A
+
+    def f_space(self, x):
+        '''Format and return a given float with space as thousands separator'''
+        import locale
+        locale.setlocale(locale.LC_ALL, '')
+        return locale.format_string('%14.2f', x, grouping=True)
 
 
 class part():
