@@ -176,10 +176,10 @@ def main_database_example():
     sys.add_part('Sonstiges', invest*0.10, 0, 0, 0, 0)
 
     df_V1 = pd.DataFrame(
-            {'Q': [5410.9, 3954.4, 92],
+            {'V Q': [5410.9, 3954.4, 92],
              'price': [20, 30, 237.4]})
     df_E1 = pd.DataFrame(
-            {'Q': [494, 1811, 8098, 3954, 1852],
+            {'E Q': [494, 1811, 8098, 3954, 1852],
              'price': [100, 146, 60, 30, 220]})
 
     # Calculate the annuity of the energy system
@@ -348,6 +348,7 @@ class system():
                        r_all=None,
                        price_op=30,
                        df_V1=pd.DataFrame({'Q': [0], 'price': [0]}),
+                       df_S1=pd.DataFrame(),
                        df_E1=None):
         '''
         VDI 2067:
@@ -368,6 +369,9 @@ class system():
             df_V1 (Pandas DataFrame): DataFrame consisting of two columns
             (e.g. energy and price) that will be multiplied to calculate the
             demand-related costs
+
+            df_S1 (Pandas DataFrame): DataFrame consisting of two columns that
+            will be multiplied to calculate the other costs in the first year
 
             df_E1 (Pandas DataFrame): DataFrame consisting of two columns
             (e.g. energy and price) that will be multiplied to calculate the
@@ -397,7 +401,7 @@ class system():
             'A_N_B': -1 * df_parts['A_N_B'].sum(),
             # Calculate demand, "other costs" and proceeds for the whole system
             'A_N_V': -1 * self.calc_annuity_demand(T, q, r_V, df_V1),
-            'A_N_S': -1 * self.calc_annuity_other_costs(T, q, r_S),
+            'A_N_S': -1 * self.calc_annuity_other_costs(T, q, r_S, df_S1),
             'A_N_E': +1 * self.calc_annuity_proceeds(T, q, r_E, df_E1),
             })
 
@@ -451,13 +455,14 @@ class system():
         else:  # Calculation without observation period (Not part of VDI 2067!)
             a = b_V = 1
 
+        self.df_V1 = df_V1
         A_V1 = df_V1.prod(axis=1)  # Multiply columns row-wise
         self.df_A_N_V = A_V1 * a * b_V  # apply price changes
         A_N_V = self.df_A_N_V.sum()  # Sum up to a single value
 
         return A_N_V  # annuity of the demand-related costs
 
-    def calc_annuity_other_costs(self, T, q, r, A_S1=0):
+    def calc_annuity_other_costs(self, T, q, r, df_S1=pd.DataFrame()):
         '''
         8.1.4 Other costs (Sonstige Kosten)
 
@@ -468,7 +473,8 @@ class system():
 
             r (float): price change factor (Preisänderungsfaktor)
 
-            A_S1 (float): other costs in the first year
+            df_S1 (Pandas DataFrame): DataFrame consisting of two columns that
+            will be multiplied to calculate the other costs in the first year
 
         Returns:
             A_N_S (float): annuity of other costs
@@ -477,10 +483,14 @@ class system():
             a = calc_annuity_factor(T, q)  # annuity factor
             # price dynamic cash value factor for other costs
             b_S = calc_cash_value_factor(T, r, q)
-            A_N_S = A_S1 * a * b_S  # annuity of other costs
 
         else:  # Calculation without observation period (Not part of VDI 2067!)
-            A_N_S = A_S1
+            a = b_S = 1
+
+        self.df_S1 = df_S1
+        A_S1 = df_S1.prod(axis=1)  # Multiply columns row-wise
+        self.df_A_N_S = A_S1 * a * b_S  # apply price changes
+        A_N_S = self.df_A_N_S.sum()  # Sum up to a single value
 
         return A_N_S
 
@@ -522,6 +532,7 @@ class system():
         else:
             self.df_A_N_E = pd.Series()
 
+        self.df_E1 = df_E1
         A_N_E = self.df_A_N_E.sum()  # Sum up to a single value
 
         return A_N_E  # annuity of the proceeds
@@ -571,6 +582,23 @@ class system():
 
         return pp_A
 
+    def pprint_VSE(self):
+        '''Convenience function for pretty-printing the input data for
+        operation, demand and other costs to the console.
+        '''
+        pd.set_option('precision', 2)  # Set the number of decimal points
+        pd.set_option('display.float_format', self.f_space)
+        print('------------ Annuity details ------------')
+        if len(self.df_V1) > 0:
+            print(pd.concat([self.df_V1, self.df_A_N_V], axis=1).to_string())
+        if len(self.df_S1) > 0:
+            print(pd.concat([self.df_S1, self.df_A_N_S], axis=1).to_string())
+        if len(self.df_E1) > 0:
+            print(pd.concat([self.df_E1, self.df_A_N_E], axis=1).to_string())
+        print('-----------------------------------------')
+        pd.reset_option('precision')  # ...and reset the setting from above
+        pd.reset_option('display.float_format')
+
     def f_space(self, x):
         '''Format and return a given float with space as thousands separator'''
         import locale
@@ -595,6 +623,7 @@ class part():
         self.fund = fund  # factor for funding
 
         # To be calculated by calc_annuity_capital()
+        self.A = []  # list of cash values for all procured replacements
         self.n = None  # number of replacements
         self.R_W = None  # residual value
         self.A_N_K = None  # annuity of the capital-related costs
@@ -666,6 +695,7 @@ class part():
         A_N_K = (sum(A) - R_W) * a  # annuity of the capital-related costs
 
         # Store values
+        self.A = A
         self.n = n
         self.R_W = R_W
         self.A_N_K = A_N_K
