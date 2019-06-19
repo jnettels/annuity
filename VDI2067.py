@@ -755,12 +755,15 @@ def calc_annuity_factor(T, q):
         a (float): annuity factor
 
     '''
-    try:
-        a = (q-1) / (1-pow(q, -T))  # annuity factor
-    except ZeroDivisionError:
-        raise ValueError('Cannot calculate annuity factor from observation '
-                         'period T=' + str(T) + ' years and interest factor q='
-                         + str(q))
+    if q == 1.0:  # Interest rate zero
+        a = 1/T
+    else:
+        try:
+            a = (q-1) / (1-pow(q, -T))  # annuity factor
+        except ZeroDivisionError:
+            raise ValueError('Cannot calculate annuity factor from observation'
+                             ' period T=' + str(T) + ' years and interest '
+                             'factor q=' + str(q))
     return a
 
 
