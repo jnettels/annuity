@@ -128,7 +128,9 @@ def main_VDI_example():
     Q_el = 417  # kWh/a
     price_th = 0.06  # €/kWh
     price_el = 0.20  # €/kWh
-    df_V1 = pd.DataFrame({'Q': [Q_th, Q_el], 'price': [price_th, price_el]})
+    df_V1 = pd.DataFrame({'quantity': [Q_th, Q_el],
+                          'price': [price_th, price_el]},
+                         index=['Wärme', 'Strom'])
 
     # Calculate the annuity of the energy system (with default r values)
     q = 1.07  # interest factor
@@ -137,6 +139,7 @@ def main_VDI_example():
 
     sys.pprint_parts()  # pretty-print a list of all parts of the system
     sys.pprint_annuities()  # pretty-print the annuities
+    sys.pprint_VSE()
     A_VDI_example = -5633.44  # Result of total annuity in official example
     diff = A.sum() - A_VDI_example
     print('Difference to VDI Example:', round(diff, 2), '€ (',
@@ -176,11 +179,13 @@ def main_database_example():
     sys.add_part('Sonstiges', invest*0.10, 0, 0, 0, 0)
 
     df_V1 = pd.DataFrame(
-            {'V Q': [5410.9, 3954.4, 92],
-             'price': [20, 30, 237.4]})
+            {'quantity': [5410.9, 3954.4, 92],
+             'price': [20, 30, 237.4]},
+            index=['Verbrauch 1', 'Verbrauch 2', 'Verbrauch 3'])
     df_E1 = pd.DataFrame(
-            {'E Q': [494, 1811, 8098, 3954, 1852],
-             'price': [100, 146, 60, 30, 220]})
+            {'quantity': [494, 1811, 8098, 3954, 1852],
+             'price': [100, 146, 60, 30, 220]},
+            index=['Erlös 1', 'Erlös 2', 'Erlös 3', 'Erlös 4', 'Erlös 5'])
 
     # Calculate the annuity of the energy system
     q = 1.03  # interest factor
@@ -193,6 +198,7 @@ def main_database_example():
 
     sys.pprint_parts()  # convenience function
     sys.pprint_annuities()  # convenience function
+    sys.pprint_VSE()
 
     sys.calc_investment()
     sys.calc_investment(include_funding=True)
@@ -209,6 +215,7 @@ class system():
         self.factors = None  # Constant factors; set by load_cost_db()
         self.parts = []  # List of part objects in system; set by add_parts()
         self.A = None  # Total annuity of the system; set by calc_annuities()
+        self.df_VSE = pd.DataFrame()  # demand, other, proc.; calc_annuities()
 
     def load_cost_db(self, path=r'Kostendatenbank.xlsx'):
         '''Load a database with cost information. This function, as well as
@@ -347,9 +354,9 @@ class system():
                        r_B=1.02, r_S=1.02, r_I=1.03, r_E=1.03,
                        r_all=None,
                        price_op=30,
-                       df_V1=pd.DataFrame({'Q': [0], 'price': [0]}),
+                       df_V1=pd.DataFrame(),
                        df_S1=pd.DataFrame(),
-                       df_E1=None):
+                       df_E1=pd.DataFrame()):
         '''
         VDI 2067:
         8 Calculation of economic efficiency using the annuity method
@@ -407,6 +414,11 @@ class system():
 
         self.A = A
 
+        # Store DataFrame with all detailed annuities (demand, other, proceeds)
+        self.df_VSE = pd.concat([self.df_A_N_V, self.df_A_N_S, self.df_A_N_E],
+                                sort=False,
+                                keys=['Demand', 'Other', 'Proceeds'])
+
         return A
 
     def calc_annuity(self, **kwargs):
@@ -457,8 +469,12 @@ class system():
 
         self.df_V1 = df_V1
         A_V1 = df_V1.prod(axis=1)  # Multiply columns row-wise
-        self.df_A_N_V = A_V1 * a * b_V  # apply price changes
-        A_N_V = self.df_A_N_V.sum()  # Sum up to a single value
+        self.S_A_N_V = A_V1 * a * b_V  # apply price changes
+        self.S_A_N_V.name = 'product'  # Set title of Pandas Series
+        A_N_V = self.S_A_N_V.sum()  # Sum up to a single value
+
+        # Store combined DataFrame with input and result
+        self.df_A_N_V = pd.concat([self.df_V1, self.S_A_N_V], axis=1)
 
         return A_N_V  # annuity of the demand-related costs
 
@@ -489,12 +505,16 @@ class system():
 
         self.df_S1 = df_S1
         A_S1 = df_S1.prod(axis=1)  # Multiply columns row-wise
-        self.df_A_N_S = A_S1 * a * b_S  # apply price changes
-        A_N_S = self.df_A_N_S.sum()  # Sum up to a single value
+        self.S_A_N_S = A_S1 * a * b_S  # apply price changes
+        self.S_A_N_S.name = 'product'  # Set title of Pandas Series
+        A_N_S = self.S_A_N_S.sum()  # Sum up to a single value
+
+        # Store combined DataFrame with input and result
+        self.df_A_N_S = pd.concat([self.df_S1, self.S_A_N_S], axis=1)
 
         return A_N_S
 
-    def calc_annuity_proceeds(self, T, q, r, df_E1=None):
+    def calc_annuity_proceeds(self, T, q, r, df_E1=pd.DataFrame()):
         '''
         8.2 Proceeds (Erlöse)
 
@@ -525,15 +545,14 @@ class system():
         else:  # Calculation without observation period (Not part of VDI 2067!)
             a = b_E = 1
 
-        if df_E1 is not None:
-            # Multiply columns row-wise to get the proceeds in the first year
-            E1 = df_E1.prod(axis=1)
-            self.df_A_N_E = E1 * a * b_E  # apply price changes
-        else:
-            self.df_A_N_E = pd.Series()
-
         self.df_E1 = df_E1
-        A_N_E = self.df_A_N_E.sum()  # Sum up to a single value
+        E1 = df_E1.prod(axis=1)  # Multiply columns row-wise
+        self.S_A_N_E = E1 * a * b_E  # apply price changes
+        self.S_A_N_E.name = 'product'  # Set title of Pandas Series
+        A_N_E = self.S_A_N_E.sum()  # Sum up to a single value
+
+        # Store combined DataFrame with input and result
+        self.df_A_N_E = pd.concat([self.df_E1, self.S_A_N_E], axis=1)
 
         return A_N_E  # annuity of the proceeds
 
@@ -589,15 +608,13 @@ class system():
         pd.set_option('precision', 2)  # Set the number of decimal points
         pd.set_option('display.float_format', self.f_space)
         print('------------ Annuity details ------------')
-        if len(self.df_V1) > 0:
-            print(pd.concat([self.df_V1, self.df_A_N_V], axis=1).to_string())
-        if len(self.df_S1) > 0:
-            print(pd.concat([self.df_S1, self.df_A_N_S], axis=1).to_string())
-        if len(self.df_E1) > 0:
-            print(pd.concat([self.df_E1, self.df_A_N_E], axis=1).to_string())
+        if not self.df_VSE.empty:
+            print(self.df_VSE.to_string())
         print('-----------------------------------------')
         pd.reset_option('precision')  # ...and reset the setting from above
         pd.reset_option('display.float_format')
+
+        return self.df_VSE
 
     def f_space(self, x):
         '''Format and return a given float with space as thousands separator'''
