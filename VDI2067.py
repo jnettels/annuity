@@ -19,7 +19,7 @@ along with this program.  If not, see https://www.gnu.org/licenses/.
 
 
 VDI 2067
-================
+========
 This is an implementation of the calculation of economic efficiency
 using the annuity method defined in the German VDI 2067.
 
@@ -30,6 +30,17 @@ using the annuity method defined in the German VDI 2067.
     **Fundamentals and economic calculation**
 
     *September 2012 (ICS 91.140.01)*
+
+Copyright:
+
+    *Verein Deutscher Ingenieure e.V.*
+
+    *VDI Standards Department*
+
+    *VDI-Platz 1, 40468 Duesseldorf, Germany*
+
+Reproduced with the permission of the Verein Deutscher Ingenieure e.V.,
+for non-commercial use only.
 
 Notes
 -----

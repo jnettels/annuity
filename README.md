@@ -11,6 +11,17 @@ using the annuity method defined in the German VDI 2067.
 
 *September 2012 (ICS 91.140.01)*
 
+Copyright:
+
+*Verein Deutscher Ingenieure e.V.*
+
+*VDI Standards Department*
+
+*VDI-Platz 1, 40468 Duesseldorf, Germany*
+
+Reproduced with the permission of the Verein Deutscher Ingenieure e.V.,
+for non-commercial use only.
+
 Notes
 -----
 The basic usage consists of two main steps:
