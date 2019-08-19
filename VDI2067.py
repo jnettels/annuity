@@ -221,21 +221,45 @@ class system():
         '''Load a database with cost information. This function, as well as
         ``add_part_db()`` expect a certain structure and column headers.
         '''
-        db = pd.read_excel(path, sheet_name='Datenbank', index_col=[0, 1, 2],
-                           header=0)
+        db = pd.read_excel(path, sheet_name='Regressionen',
+                           index_col=[0, 1, 2], header=0)
         factors = pd.read_excel(path, sheet_name='Konstanten', index_col=[0],
                                 header=0, usecols=[0, 1], squeeze=True)
         self.cost_db = db
         self.factors = factors
         return db
 
-    def add_part_db(self, technology, variant, component, size, fund=0):
-        '''Add a "part" object to the energy system by using the cost
-        database. All required properties are derived from the ``size``
-        of the new component.
+    def add_part_db(self, technology, variant, component, size, fund=0,
+                    raise_error=True):
+        r'''Add a ``part`` object to the energy system by using the cost
+        database. Investment cost ``A_0`` is determined with the formula
 
-        The ``size`` can also be zero, in which case there are simply no
-        costs (this allows the use of empty placeholders).
+        .. math:: A_0 = a \cdot size^b \cdot size
+
+        where factor ``a`` and exponent ``b`` are read from the cost database.
+        This approach takes into account decreasing relative costs with
+        larger installation size.
+
+        Args:
+            technology (str): The part's technology, as found in the database.
+
+            variant (str): The part's technology, as found in the database.
+
+            component (str): The part's technology, as found in the database.
+
+            size (float): All required properties are derived from the ``size``
+            of the new component. The ``size`` can also be zero, in which case
+            there are simply no costs (this allows the use of empty
+            placeholders).
+
+            fund (float, optional): Factor for funding of investment amount in
+            first year (``fund=0``: no funding, ``fund=1``: 100% funding)
+
+            raise_error (bool, optional): If true, an error is raised if a
+            part is not found. Otherwise the error is only logged.
+
+        Returns:
+            True (parts are added to ``self.parts``)
         '''
         # Savety check
         if self.cost_db is None:
@@ -246,10 +270,15 @@ class system():
         try:
             df = self.cost_db.loc[part_tuple]
         except pd.core.indexing.IndexingError:
-            if logger.isEnabledFor(logging.DEBUG):
-                print(self.cost_db)
-            raise IndexError(
-                    str(part_tuple) + ' not found in index of database')
+            if raise_error:
+                if logger.isEnabledFor(logging.DEBUG):
+                    print(self.cost_db)
+                raise IndexError(
+                        str(part_tuple) + ' not found in index of database')
+            else:
+                logger.error(
+                        str(part_tuple) + ' not found in index of database')
+                return False
 
         a = df['Reg. Faktor']
         b = df['Reg. Exponent']
@@ -276,6 +305,7 @@ class system():
 
         self.add_part(part_tuple, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=fund,
                       size=(size, df['Bezugseinheit']))
+        return True
 
     def add_part(self, name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=0,
                  size=None):
