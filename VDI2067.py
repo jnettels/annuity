@@ -315,11 +315,11 @@ class system():
         f_W_Insp = df['Wartung']  # Effort for servicing and inspection
 
         self.add_part(part_tuple, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=fund,
-                      size=(size, df['Bezugseinheit']))
+                      size=size, unit=df['Bezugseinheit'])
         return True
 
     def add_part(self, name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=0,
-                 size=None):
+                 size=None, unit=None):
         '''
         Create a new object of the class ``part`` and add it to the list
         of parts contained in the energy system. The concept of funding
@@ -342,14 +342,16 @@ class system():
             fund (float): Factor for funding of investment amount in first
             year (``fund=0``: no funding, ``fund=1``: 100% funding)
 
-            size (tuple): Size of the part when loaded from
+            size (float): Size of the part when loaded from
             database (optional). Default = None.
+
+            unit (str): Unit corresponding to size (optional)
 
         Returns:
             None
         '''
         new_part = part(name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=fund,
-                        size=size)
+                        size=size, unit=unit)
         self.parts.append(new_part)
 
     def list_parts(self):
@@ -670,9 +672,10 @@ class part():
     costs and operation-related costs.
     '''
     def __init__(self, name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=0,
-                 size=None):
+                 size=None, unit=None):
         self.name = name  # Name of the component
         self.size = size  # Size of the part when loaded from database
+        self.unit = unit  # Unit corresponding to size
         self.A_0 = A_0  # Investment amount [€]
         self.T_N = T_N  # service life (in years)
         self.f_Inst = f_Inst  # Effort for maintenance
