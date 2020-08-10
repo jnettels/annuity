@@ -311,7 +311,8 @@ class system():
         f_Inst = df['Instandsetzung']  # Effort for maintenance
         f_W_Insp = df['Wartung']  # Effort for servicing and inspection
 
-        self.add_part(part_tuple, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=fund,
+        part_str = ', '.join(part_tuple)
+        self.add_part(part_str, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=fund,
                       size=size, unit=df['Bezugseinheit'])
         return True
 
