@@ -503,14 +503,15 @@ class system():
         if T > 0:  # Official calculation
             # price dynamic cash value factor for demand-related costs
             a = calc_annuity_factor(T, q)  # annuity factor
-            b_V = calc_cash_value_factor(T, r, q)
+            b = calc_cash_value_factor(T, r, q)
 
         else:  # Calculation without observation period (Not part of VDI 2067!)
-            a = b_V = 1
+            a = b = 1
 
         self.df_V1 = df_V1
-        A_V1 = df_V1.prod(axis=1)  # Multiply columns row-wise
-        self.S_A_N_V = A_V1 * a * b_V  # apply price changes
+        self.df_V1['a'] = a  # apply price changes
+        self.df_V1['b'] = b  # apply price changes
+        self.S_A_N_V = df_V1.prod(axis=1)  # Multiply columns row-wise
         self.S_A_N_V.name = 'product'  # Set title of Pandas Series
         A_N_V = self.S_A_N_V.sum()  # Sum up to a single value
 
@@ -539,14 +540,15 @@ class system():
         if T > 0:  # Official calculation
             a = calc_annuity_factor(T, q)  # annuity factor
             # price dynamic cash value factor for other costs
-            b_S = calc_cash_value_factor(T, r, q)
+            b = calc_cash_value_factor(T, r, q)
 
         else:  # Calculation without observation period (Not part of VDI 2067!)
-            a = b_S = 1
+            a = b = 1
 
         self.df_S1 = df_S1
-        A_S1 = df_S1.prod(axis=1)  # Multiply columns row-wise
-        self.S_A_N_S = A_S1 * a * b_S  # apply price changes
+        self.df_S1['a'] = a  # apply price changes
+        self.df_S1['b'] = b  # apply price changes
+        self.S_A_N_S = df_S1.prod(axis=1)  # Multiply columns row-wise
         self.S_A_N_S.name = 'product'  # Set title of Pandas Series
         A_N_S = self.S_A_N_S.sum()  # Sum up to a single value
 
@@ -581,14 +583,15 @@ class system():
         if T > 0:  # Official calculation
             a = calc_annuity_factor(T, q)  # annuity factor
             # price dynamic cash value factor for proceeds
-            b_E = calc_cash_value_factor(T, r, q)
+            b = calc_cash_value_factor(T, r, q)
 
         else:  # Calculation without observation period (Not part of VDI 2067!)
-            a = b_E = 1
+            a = b = 1
 
         self.df_E1 = df_E1
-        E1 = df_E1.prod(axis=1)  # Multiply columns row-wise
-        self.S_A_N_E = E1 * a * b_E  # apply price changes
+        self.df_E1['a'] = a  # apply price changes
+        self.df_E1['b'] = b  # apply price changes
+        self.S_A_N_E = df_E1.prod(axis=1)  # Multiply columns row-wise
         self.S_A_N_E.name = 'product'  # Set title of Pandas Series
         A_N_E = self.S_A_N_E.sum()  # Sum up to a single value
 
