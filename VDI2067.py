@@ -91,13 +91,14 @@ logger = logging.getLogger(__name__)
 
 
 def main_VDI_example():
-    '''
+    """Run the maain VDI example.
+
     This main method implements the example from VDI 2067 Annex B.
     A small difference between the results may result from rounding.
 
     This shows the most basic way to add ``parts`` to an energy system,
     define some demands and calculate the annuities.
-    '''
+    """
     # Define output format of logging function
     logging.basicConfig(format='%(asctime)-15s %(message)s')
     logger.setLevel(level='DEBUG')  # Set a default level for the logger
@@ -155,9 +156,11 @@ def main_VDI_example():
 
 
 def main_database_example():
-    ''' Main function that shows an example for loading the parts of the
+    """Run the main database example.
+
+    Main function that shows an example for loading the parts of the
     energy system from a database.
-    '''
+    """
     # Define output format of logging function
     logging.basicConfig(format='%(asctime)-15s %(message)s')
     logger.setLevel(level='INFO')  # Set a default level for the logger
@@ -166,7 +169,7 @@ def main_database_example():
 
     sys = system()
     sys.load_cost_db(path=path)
-#    print(sys.cost_db)
+    # print(sys.cost_db)
 
     fund = 0.5  # factor for funding
     sys.add_part_db('Photovoltaik', 'Dach', 'komplett', 5500)
@@ -213,11 +216,12 @@ def main_database_example():
 
 
 class system():
-    '''
-    Class representing the energy system. Add ``part`` objects to the
-    energy system to be able to perform the economic calculation with
-    ``calc_annuities()``.
-    '''
+    """Class representing the energy system.
+
+    Add ``part`` objects to the energy system to be able to perform the
+    economic calculation with ``calc_annuities()``.
+    """
+
     def __init__(self):
         self.cost_db = None  # Cost database; set by load_cost_db()
         self.factors = None  # Constant factors; set by load_cost_db()
@@ -226,9 +230,11 @@ class system():
         self.df_VSE = pd.DataFrame()  # demand, other, proc.; calc_annuities()
 
     def load_cost_db(self, path=r'Kostendatenbank.xlsx'):
-        '''Load a database with cost information. This function, as well as
-        ``add_part_db()`` expect a certain structure and column headers.
-        '''
+        """Load a database with cost information.
+
+        This function, as well as ``add_part_db()`` expect a certain
+        structure and column headers.
+        """
         db = pd.read_excel(path, sheet_name='Regressionen',
                            index_col=[0, 1, 2], header=0)
         factors = pd.read_excel(path, sheet_name='Konstanten', index_col=[0],
@@ -239,8 +245,9 @@ class system():
 
     def add_part_db(self, technology, variant, component, size, fund=0,
                     raise_error=True):
-        r'''Add a ``part`` object to the energy system by using the cost
-        database. Investment cost ``A_0`` is determined with the formula
+        r"""Add a ``part`` object to the energy system from the cost database.
+
+        Investment cost ``A_0`` is determined with the formula
 
         .. math:: A_0 = a \cdot size^b \cdot size
 
@@ -268,7 +275,7 @@ class system():
 
         Returns:
             True (parts are added to ``self.parts``)
-        '''
+        """
         # Savety check
         if self.cost_db is None:
             self.load_cost_db()
@@ -318,10 +325,10 @@ class system():
 
     def add_part(self, name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=0,
                  size=None, unit=None):
-        '''
-        Create a new object of the class ``part`` and add it to the list
-        of parts contained in the energy system. The concept of funding
-        (``fund``) is not part of the VDI 2067.
+        """Create a new ``part`` object and add it to the list of parts.
+
+        The list of parts is contained in the energy system. The concept
+        of funding (``fund``) is not part of the VDI 2067.
 
         Args:
 
@@ -347,15 +354,17 @@ class system():
 
         Returns:
             None
-        '''
+        """
         new_part = part(name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=fund,
                         size=size, unit=unit)
         self.parts.append(new_part)
 
     def list_parts(self):
-        '''Combine properties and all calculated values from the parts of
-        the energy system into one DataFrame
-        '''
+        """Return a list of all parts in the energy system.
+
+        Combine properties and all calculated values from the parts of
+        the energy system into one DataFrame.
+        """
         s_list = []
         for part_ in self.parts:
             s = pd.Series(part_.__dict__)
@@ -373,7 +382,7 @@ class system():
         return df
 
     def calc_investment(self, include_funding=False):
-        '''Convenience function for total investment cost
+        """Calculate the total investment cost.
 
         Args:
             include_funding (bool, optional): Instead of the total investment,
@@ -382,7 +391,7 @@ class system():
 
         Returns:
             A_0_sum (float): Investment cost of all parts
-        '''
+        """
         df_parts = self.list_parts()  # Get DataFrame with all parts
         A_0_sum = df_parts['A_0'].sum()  # Return sum of all investment costs
 
@@ -398,7 +407,8 @@ class system():
                        df_V1=pd.DataFrame(),
                        df_S1=pd.DataFrame(),
                        df_E1=pd.DataFrame()):
-        '''
+        """Calculate the indiviual annuities of total annual payments.
+
         VDI 2067:
         8 Calculation of economic efficiency using the annuity method
 
@@ -429,7 +439,7 @@ class system():
 
         Returns:
             A (Pandas Series): Series of all annuities
-        '''
+        """
         if r_all is not None:  # Overwrite all other r_* values at once
             if r_all >= 0:
                 r_K = r_V = r_B = r_S = r_I = r_E = r_all
@@ -463,7 +473,8 @@ class system():
         return A
 
     def calc_annuity(self, **kwargs):
-        '''
+        """Calculate the summed up annuity of total annual payments.
+
         VDI 2067:
         8.3 Annuity of total annual payments
 
@@ -475,14 +486,15 @@ class system():
 
         Returns:
             A_N (float): Total annuity of the energy system
-        '''
+        """
         A = self.calc_annuities(**kwargs)
         A_N = A.sum()
 
         return A_N
 
     def calc_annuity_demand(self, T, q, r, df_V1):
-        '''
+        """Calculate annuity of demand-related costs.
+
         8.1.2 Demand-related costs (Bedarfsgebundene Kosten)
 
         Args:
@@ -498,8 +510,7 @@ class system():
 
         Returns:
             A_N_V (float): annuity of the demand-related costs
-        '''
-
+        """
         if T > 0:  # Official calculation
             # price dynamic cash value factor for demand-related costs
             a = calc_annuity_factor(T, q)  # annuity factor
@@ -521,7 +532,8 @@ class system():
         return A_N_V  # annuity of the demand-related costs
 
     def calc_annuity_other_costs(self, T, q, r, df_S1=pd.DataFrame()):
-        '''
+        """Calculate annuity of other costs.
+
         8.1.4 Other costs (Sonstige Kosten)
 
         Args:
@@ -536,7 +548,7 @@ class system():
 
         Returns:
             A_N_S (float): annuity of other costs
-        '''
+        """
         if T > 0:  # Official calculation
             a = calc_annuity_factor(T, q)  # annuity factor
             # price dynamic cash value factor for other costs
@@ -558,7 +570,8 @@ class system():
         return A_N_S
 
     def calc_annuity_proceeds(self, T, q, r, df_E1=pd.DataFrame()):
-        '''
+        """Calculate annuity of proceeds.
+
         8.2 Proceeds (Erlöse)
 
         Project and operator dependent proceeds can arise in the same way
@@ -578,8 +591,7 @@ class system():
 
         Returns:
             A_N_E (float): annuity of the proceeds
-        '''
-
+        """
         if T > 0:  # Official calculation
             a = calc_annuity_factor(T, q)  # annuity factor
             # price dynamic cash value factor for proceeds
@@ -601,9 +613,7 @@ class system():
         return A_N_E  # annuity of the proceeds
 
     def pprint_parts(self):
-        '''Convenience function for pretty-printing the properties of all parts
-        to the console.
-        '''
+        """Pretty print the parts of the energy system to the console."""
         df_parts = self.list_parts()  # Get DataFrame with all parts
 
         A = self.calc_investment()
@@ -624,9 +634,7 @@ class system():
         return df_parts
 
     def pprint_annuities(self):
-        '''Convenience function for pretty-printing the calculated annuities
-        to the console.
-        '''
+        """Pretty print the annuities to the console."""
         pp_A = self.A.rename(index={'A_N_K': 'Capital-related costs:',
                                     'A_N_B': 'Operation-related costs:',
                                     'A_N_V': 'Demand-related costs:',
@@ -646,9 +654,7 @@ class system():
         return pp_A
 
     def pprint_VSE(self):
-        '''Convenience function for pretty-printing the input data for
-        operation, demand and other costs to the console.
-        '''
+        """Pretty-print operation, demand and other costs to the console."""
         pd.set_option('precision', 2)  # Set the number of decimal points
         pd.set_option('display.float_format', self.f_space)
         print('------------ Annuity details ------------')
@@ -661,17 +667,19 @@ class system():
         return self.df_VSE
 
     def f_space(self, x):
-        '''Format and return a given float with space as thousands separator'''
+        """Format and return a float with space as thousands separator."""
         import locale
         locale.setlocale(locale.LC_ALL, '')
         return locale.format_string('%14.2f', x, grouping=True)
 
 
 class part():
-    '''Representation of a component of an energy system. Stores all
-    properties of the component and can calculate its own capital-related
-    costs and operation-related costs.
-    '''
+    """Representation of a component of an energy system.
+
+    Stores all properties of the component and can calculate its own
+    capital-related costs and operation-related costs.
+    """
+
     def __init__(self, name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=0,
                  size=None, unit=None):
         self.name = name  # Name of the component
@@ -694,7 +702,8 @@ class part():
         self.A_N_B = None  # annuity of the operation-related costs
 
     def calc_annuity_capital(self, T, q, r):
-        '''
+        """Calculate annuity of capital-related costs.
+
         8.1.1 Capital-related costs (Kapitalgebundene Kosten)
 
         The observation period T is to be established and documented.
@@ -718,7 +727,7 @@ class part():
 
         Returns:
             None
-        '''
+        """
         if T <= 0:  # Calc without observation period (Not part of VDI 2067!)
             T = self.T_N  # Calculate each part with its own service life time
 
@@ -730,7 +739,7 @@ class part():
             n = 0  # for one-time expenses, like "planning"
         else:
             n = math.ceil(T/self.T_N) - 1
-#        print(T, self.T_N, n)
+        # print(T, self.T_N, n)
 
         A = []  # list of cash values for all procured replacements
         for i in range(0, n+1):
@@ -763,7 +772,8 @@ class part():
         self.A_N_K = A_N_K
 
     def calc_annuity_operation(self, T, q, r_B, r_I, price_op):
-        '''
+        """Calculate annuity of operation-related costs.
+
         8.1.3 Operation-related costs (Betriebsgebundene Kosten)
 
         Args:
@@ -777,7 +787,7 @@ class part():
 
         Returns:
             None
-        '''
+        """
         if T <= 0:  # Not part of VDI 2067!
             T = self.T_N  # Calculate each part with its own service life time
 
@@ -804,7 +814,7 @@ class part():
 
 
 def calc_annuity_factor(T, q):
-    '''Calculation of annuity factor ``a``.
+    """Calculate annuity factor ``a``.
 
     VDI 2067, section 8.1.1, equation (4)
 
@@ -816,7 +826,7 @@ def calc_annuity_factor(T, q):
     Returns:
         a (float): annuity factor
 
-    '''
+    """
     if q == 1.0:  # Interest rate zero
         a = 1/T
     else:
@@ -830,7 +840,7 @@ def calc_annuity_factor(T, q):
 
 
 def calc_cash_value_factor(T, r, q):
-    '''Calculation of price-dynamic cash value factor.
+    """Calculate price-dynamic cash value factor ``b``.
 
     VDI 2067, section 8.1.1, equation (5)
 
@@ -844,7 +854,7 @@ def calc_cash_value_factor(T, r, q):
     Returns:
         b (float): price-dynamic cash value factor
 
-    '''
+    """
     if r == q:
         b = T/q
     else:
@@ -853,8 +863,8 @@ def calc_cash_value_factor(T, r, q):
 
 
 if __name__ == "__main__":
-    '''If this imported as a module, this part will be skipped.
+    """If this imported as a module, this part will be skipped.
     If this script is executed directly, we call our main method from here.
-    '''
+    """
     main_VDI_example()
-#    main_database_example()
+    # main_database_example()
