@@ -135,16 +135,18 @@ def main_VDI_example():
     # Define demands in first year
     Q_th = 14012  # kWh/a
     Q_el = 417  # kWh/a
-    price_th = 0.06  # €/kWh
-    price_el = 0.20  # €/kWh
+    price_th = -0.06  # €/kWh
+    price_el = -0.20  # €/kWh
     df_V1 = pd.DataFrame({'quantity': [Q_th, Q_el],
                           'price': [price_th, price_el]},
                          index=['Wärme', 'Strom'])
 
+    VSE_dict = {'Demand-related costs': {'df': df_V1, 'r': 1.03}}
+
     # Calculate the annuity of the energy system (with default r values)
     q = 1.07  # interest factor
     T = 30  # observation period
-    A = sys.calc_annuities(T=T, q=q, df_V1=df_V1)  # Get Series of annuities
+    A = sys.calc_annuities(T=T, q=q, VSE_dict=VSE_dict)  # Series of annuities
 
     sys.pprint_parts()  # pretty-print a list of all parts of the system
     sys.pprint_annuities()  # pretty-print the annuities
@@ -191,21 +193,20 @@ def main_database_example():
 
     df_V1 = pd.DataFrame(
             {'quantity': [5410.9, 3954.4, 92],
-             'price': [20, 30, 237.4]},
+             'price': [-20, -30, -237.4]},
             index=['Verbrauch 1', 'Verbrauch 2', 'Verbrauch 3'])
     df_E1 = pd.DataFrame(
             {'quantity': [494, 1811, 8098, 3954, 1852],
              'price': [100, 146, 60, 30, 220]},
             index=['Erlös 1', 'Erlös 2', 'Erlös 3', 'Erlös 4', 'Erlös 5'])
 
+    VSE_dict = {'Demand-related costs': {'df': df_V1, 'r': 1.03},
+                'Proceeds': {'df': df_E1, 'r': 1.03}}
+
     # Calculate the annuity of the energy system
     q = 1.03  # interest factor
     T = 20  # observation period
-    sys.calc_annuities(T=T, q=q,
-                       # r_all=1,
-                       df_V1=df_V1,
-                       df_E1=df_E1,
-                       )  # Get Series of annuities
+    sys.calc_annuities(T=T, q=q, VSE_dict=VSE_dict)  # Series of annuities
 
     sys.pprint_parts()  # convenience function
     sys.pprint_annuities()  # convenience function
@@ -213,6 +214,8 @@ def main_database_example():
 
     sys.calc_investment()
     sys.calc_investment(include_funding=True)
+
+    sys.calc_amortization(pprint=True)
 
 
 class system():
@@ -400,78 +403,6 @@ class system():
 
         return A_0_sum
 
-    def calc_annuities(self, T=30, q=1.07, r_K=1.03, r_V=1.03,
-                       r_B=1.02, r_S=1.02, r_I=1.03, r_E=1.03,
-                       r_all=None,
-                       price_op=30,
-                       df_V1=pd.DataFrame(),
-                       df_S1=pd.DataFrame(),
-                       df_E1=pd.DataFrame()):
-        """Calculate the indiviual annuities of total annual payments.
-
-        VDI 2067:
-        8 Calculation of economic efficiency using the annuity method
-
-        Defaults for cost factors are picked from VDI 2067 Table B1 Example.
-
-        Args:
-            T (int): observation period (in years) (Nutzungsdauer)
-
-            q (float): interest factor (Zinsfaktor)
-
-            r_* (float): price change factors (Preisänderungsfaktor)
-
-            r_all (float): overwrite all other r_* values at once. Set to
-            ``None`` or a negative value to ignore.
-
-            df_V1 (Pandas DataFrame): DataFrame consisting of two columns
-            (e.g. energy and price) that will be multiplied to calculate the
-            demand-related costs
-
-            df_S1 (Pandas DataFrame): DataFrame consisting of two columns that
-            will be multiplied to calculate the other costs in the first year
-
-            df_E1 (Pandas DataFrame): DataFrame consisting of two columns
-            (e.g. energy and price) that will be multiplied to calculate the
-            proceeds
-
-            price_op (float): price of operation in [€/h]
-
-        Returns:
-            A (Pandas Series): Series of all annuities
-        """
-        if r_all is not None:  # Overwrite all other r_* values at once
-            if r_all >= 0:
-                r_K = r_V = r_B = r_S = r_I = r_E = r_all
-
-        # Calculate capital and operation annuities for all components (parts)
-        for part in self.parts:
-            part.calc_annuity_capital(T, q, r_K)  # calc A_N_K
-            part.calc_annuity_operation(T, q, r_B, r_I, price_op)  # calc A_N_B
-
-        # Get a DataFrame used to calculate the sums of the annuities
-        df_parts = self.list_parts()
-
-        # Create a Series of all annuities. Define expenses as negative
-        # and income as positive values.
-        A = pd.Series({
-            'A_N_K': -1 * df_parts['A_N_K'].sum(),
-            'A_N_B': -1 * df_parts['A_N_B'].sum(),
-            # Calculate demand, "other costs" and proceeds for the whole system
-            'A_N_V': -1 * self.calc_annuity_demand(T, q, r_V, df_V1),
-            'A_N_S': -1 * self.calc_annuity_other_costs(T, q, r_S, df_S1),
-            'A_N_E': +1 * self.calc_annuity_proceeds(T, q, r_E, df_E1),
-            })
-
-        self.A = A
-
-        # Store DataFrame with all detailed annuities (demand, other, proceeds)
-        self.df_VSE = pd.concat([self.df_A_N_V, self.df_A_N_S, self.df_A_N_E],
-                                sort=False,
-                                keys=['Demand', 'Other', 'Proceeds'])
-
-        return A
-
     def calc_annuity(self, **kwargs):
         """Calculate the summed up annuity of total annual payments.
 
@@ -492,10 +423,106 @@ class system():
 
         return A_N
 
-    def calc_annuity_demand(self, T, q, r, df_V1):
-        """Calculate annuity of demand-related costs.
+    def calc_annuities(self, T=30, q=1.07, r_K=1.03, r_B=1.02, r_I=1.03,
+                       r_all=None,
+                       price_op=30,
+                       VSE_dict=dict({
+                           'Demand-related costs': {'df': pd.DataFrame(),
+                                                    'r': 1.03},  # r_V
+                           'Other costs': {'df': pd.DataFrame(),
+                                           'r': 1.02},  # r_S
+                           'Proceeds': {'df': pd.DataFrame(),
+                                        'r': 1.03},  # r_E
+                            }),
+                       A_N_K_name='Capital-related costs',
+                       A_N_B_name='Operation-related costs',
+                       ):
+        """Calculate the indiviual annuities of total annual payments.
 
-        8.1.2 Demand-related costs (Bedarfsgebundene Kosten)
+        VDI 2067:
+        8 Calculation of economic efficiency using the annuity method
+
+        Defaults for cost factors are picked from VDI 2067 Table B1 Example.
+        The nested structure of ``VSE_dict`` may seem complicated at first,
+        but allows an unlimitted number of cost types with their individual
+        price change factors ``r``. The VDI only differentiates three types.
+        'VSE' is for 'Verbrauch-Sonstiges-Erlöse'.
+
+        .. note::
+            In your input, define costs as negative and proceeds as positive
+            values for the ``price`` of each ``quantity``.
+
+        Args:
+            T (int): observation period (in years) (Nutzungsdauer)
+
+            q (float): interest factor (Zinsfaktor)
+
+            r_* (float): price change factors (Preisänderungsfaktor)
+
+            r_all (float): overwrite all other r_* values at once. Set to
+            ``None`` or a negative value to ignore.
+
+            price_op (float): price of operation in [€/h]
+
+            VSE_dict (dict): A nested dict, with a dict for each
+            cost type (demand, other , proceeds) that contains:
+
+                df (DataFrame): DataFrame consisting of two columns (quantity
+                and price) that are multiplied to calculate the costs
+
+                r (float): price change factor for this cost type
+
+            A_N_K_name (str, optional): Name for 'Capital-related costs'
+
+            A_N_B_name (str, optional): Name for 'Operation-related costs'
+
+        Returns:
+            A (Pandas Series): Series of all annuities
+        """
+        if r_all is not None:  # Overwrite all other r_* values at once
+            if r_all >= 0:
+                r_K = r_B = r_I = r_all
+
+        # Calculate capital and operation annuities for all components (parts)
+        for part in self.parts:
+            part.calc_annuity_capital(T, q, r_K)  # calc A_N_K
+            part.calc_annuity_operation(T, q, r_B, r_I, price_op)  # calc A_N_B
+
+        # Get a DataFrame used to calculate the sums of the annuities
+        df_parts = self.list_parts()
+
+        # Create a Series of all annuities
+        self.A = pd.Series({A_N_K_name: df_parts['A_N_K'].sum(),
+                            A_N_B_name: df_parts['A_N_B'].sum()})
+
+        # Calculate demand, "other costs" and proceeds for the whole system
+        for cost_type in VSE_dict.keys():
+            df = VSE_dict[cost_type]['df']
+            r = VSE_dict[cost_type]['r']
+
+            if r_all is not None:  # Overwrite all other r_* values at once
+                if r_all >= 0:
+                    r = r_all
+
+            A_N = self.calc_annuity_cost_template(T, q, r, df)
+            A_N = pd.concat([A_N], keys=[cost_type])
+            self.df_VSE = pd.concat([self.df_VSE, A_N])
+            self.A[cost_type] = A_N['product'].sum()
+
+        self.T = T
+        self.A_N_K_name = A_N_K_name
+        self.A_N_B_name = A_N_B_name
+        return self.A
+
+    def calc_annuity_cost_template(self, T, q, r, df):
+        """Calculate annuity of various costs types with the same template.
+
+        Covers the following parts of the VDI, since they all use
+        the same formulas:
+
+        - 8.1.2 Demand-related costs (Bedarfsgebundene Kosten)
+        - 8.1.4 Other costs (Sonstige Kosten)
+        - 8.2 Proceeds (Erlöse)
 
         Args:
             T (int): observation period (in years) (Nutzungsdauer)
@@ -504,113 +531,61 @@ class system():
 
             r (float): price change factor (Preisänderungsfaktor)
 
-            df_V1 (Pandas DataFrame): DataFrame consisting of two columns
-            (e.g. energy and price) that will be multiplied to calculate the
-            demand-related costs
+            df (DataFrame): DataFrame consisting of two columns
+            (e.g. quantity and price in first year) that will be
+            multiplied to calculate the annual costs
 
         Returns:
-            A_N_V (float): annuity of the demand-related costs
+            df (DataFrame): Results with annuities stored in column 'product'
         """
-        if T > 0:  # Official calculation
-            # price dynamic cash value factor for demand-related costs
+        if T > 0:  # Official VDI calculation
             a = calc_annuity_factor(T, q)  # annuity factor
-            b = calc_cash_value_factor(T, r, q)
+            b = calc_cash_value_factor(T, r, q)  # price-dynamic cash value f.
 
         else:  # Calculation without observation period (Not part of VDI 2067!)
             a = b = 1
 
-        self.df_V1 = df_V1
-        self.df_V1['a'] = a  # apply price changes
-        self.df_V1['b'] = b  # apply price changes
-        self.S_A_N_V = df_V1.prod(axis=1)  # Multiply columns row-wise
-        self.S_A_N_V.name = 'product'  # Set title of Pandas Series
-        A_N_V = self.S_A_N_V.sum()  # Sum up to a single value
+        df['a'] = a  # store annuity factor
+        df['b'] = b  # store cash value factor
+        df['product'] = df.prod(axis=1)  # Annuity: multiply columns row-wise
+        df['T'] = T  # store observation period
+        df['q'] = q  # store interest factor
+        df['r'] = r  # store price change factor
 
-        # Store combined DataFrame with input and result
-        self.df_A_N_V = pd.concat([self.df_V1, self.S_A_N_V], axis=1)
+        return df
 
-        return A_N_V  # annuity of the demand-related costs
+    def calc_amortization(self, pprint=False):
+        r"""Calculate the amortization time.
 
-    def calc_annuity_other_costs(self, T, q, r, df_S1=pd.DataFrame()):
-        """Calculate annuity of other costs.
+        .. note::
+            This calculation is not part of VDI 2067.
 
-        8.1.4 Other costs (Sonstige Kosten)
+        Amortization time is the total invest throughout the observation
+        period divided by the annual return on invest:
 
-        Args:
-            T (int): observation period (in years) (Nutzungsdauer)
+        .. math::
+            t_{amort} = \frac{total\ invest}{return\ on\ invest}
+            = \frac{-A_{N,K} * T}{A_N - A_{N,K}}
 
-            q (float): interest factor (Zinsfaktor)
-
-            r (float): price change factor (Preisänderungsfaktor)
-
-            df_S1 (Pandas DataFrame): DataFrame consisting of two columns that
-            will be multiplied to calculate the other costs in the first year
-
-        Returns:
-            A_N_S (float): annuity of other costs
+        If the total annuity ``A_N`` is zero, the amortization time will be
+        equal to the obervation period ``T``.
         """
-        if T > 0:  # Official calculation
-            a = calc_annuity_factor(T, q)  # annuity factor
-            # price dynamic cash value factor for other costs
-            b = calc_cash_value_factor(T, r, q)
+        total_invest = self.A[self.A_N_K_name] * self.T * (-1)
+        return_on_invest = self.A.sum() - self.A[self.A_N_K_name]
 
-        else:  # Calculation without observation period (Not part of VDI 2067!)
-            a = b = 1
+        t_amort = total_invest / return_on_invest
 
-        self.df_S1 = df_S1
-        self.df_S1['a'] = a  # apply price changes
-        self.df_S1['b'] = b  # apply price changes
-        self.S_A_N_S = df_S1.prod(axis=1)  # Multiply columns row-wise
-        self.S_A_N_S.name = 'product'  # Set title of Pandas Series
-        A_N_S = self.S_A_N_S.sum()  # Sum up to a single value
+        if return_on_invest > 0:
+            t_amort = total_invest / return_on_invest
+            if pprint:
+                print('Amortization time is {:.1f} years'.format(t_amort))
+        else:
+            t_amort = float('NaN')
+            if pprint:
+                print('Amortization is not possible due to negative return '
+                      'on invest')
 
-        # Store combined DataFrame with input and result
-        self.df_A_N_S = pd.concat([self.df_S1, self.S_A_N_S], axis=1)
-
-        return A_N_S
-
-    def calc_annuity_proceeds(self, T, q, r, df_E1=pd.DataFrame()):
-        """Calculate annuity of proceeds.
-
-        8.2 Proceeds (Erlöse)
-
-        Project and operator dependent proceeds can arise in the same way
-        as the costs described above. This applies to capital-related
-        proceeds (investments, subsidies), to demand-related proceeds,
-        and to operation-related proceeds.
-
-        Args:
-            T (int): observation period (in years) (Nutzungsdauer)
-
-            q (float): interest factor (Zinsfaktor)
-
-            r (float): price change factor (Preisänderungsfaktor)
-
-            df_E1 (DataFrame): DataFrame with proceeds in the first year (two
-            columns that are multiplied and then summed up)
-
-        Returns:
-            A_N_E (float): annuity of the proceeds
-        """
-        if T > 0:  # Official calculation
-            a = calc_annuity_factor(T, q)  # annuity factor
-            # price dynamic cash value factor for proceeds
-            b = calc_cash_value_factor(T, r, q)
-
-        else:  # Calculation without observation period (Not part of VDI 2067!)
-            a = b = 1
-
-        self.df_E1 = df_E1
-        self.df_E1['a'] = a  # apply price changes
-        self.df_E1['b'] = b  # apply price changes
-        self.S_A_N_E = df_E1.prod(axis=1)  # Multiply columns row-wise
-        self.S_A_N_E.name = 'product'  # Set title of Pandas Series
-        A_N_E = self.S_A_N_E.sum()  # Sum up to a single value
-
-        # Store combined DataFrame with input and result
-        self.df_A_N_E = pd.concat([self.df_E1, self.S_A_N_E], axis=1)
-
-        return A_N_E  # annuity of the proceeds
+        return t_amort
 
     def pprint_parts(self):
         """Pretty print the parts of the energy system to the console."""
@@ -635,23 +610,17 @@ class system():
 
     def pprint_annuities(self):
         """Pretty print the annuities to the console."""
-        pp_A = self.A.rename(index={'A_N_K': 'Capital-related costs:',
-                                    'A_N_B': 'Operation-related costs:',
-                                    'A_N_V': 'Demand-related costs:',
-                                    'A_N_S': 'Other costs:',
-                                    'A_N_E': 'Proceeds:', })
-
         pd.set_option('precision', 2)  # Set the number of decimal points
         pd.set_option('display.float_format', self.f_space)
         print('--------------- Annuities ---------------')
-        print(pp_A.to_string())
+        print(self.A.to_string())
         print('-----------------------------------------')
-        print('Total annuity:            ', self.f_space(pp_A.sum()))
+        print('Total annuity:            ', self.f_space(self.A.sum()))
         print('-----------------------------------------')
         pd.reset_option('precision')  # ...and reset the setting from above
         pd.reset_option('display.float_format')
 
-        return pp_A
+        return self.A
 
     def pprint_VSE(self):
         """Pretty-print operation, demand and other costs to the console."""
@@ -763,13 +732,14 @@ class part():
             # Note: The original investment 'self.A_0' is not changed, so as to
             # not affect the calculation of operation-related costs
 
-        A_N_K = (sum(A) - R_W) * a  # annuity of the capital-related costs
+        # annuity of the capital-related costs with negative sign applied
+        A_N_K = (sum(A) - R_W) * a * (-1)
 
         # Store values
-        self.A = A
-        self.n = n
-        self.R_W = R_W
-        self.A_N_K = A_N_K
+        self.A = A  # list of cash values for all procured replacements
+        self.n = n  # number of replacements
+        self.R_W = R_W  # residual value
+        self.A_N_K = A_N_K  # annuity of the capital-related costs
 
     def calc_annuity_operation(self, T, q, r_B, r_I, price_op):
         """Calculate annuity of operation-related costs.
@@ -802,14 +772,10 @@ class part():
         # price dynamic cash value factor for maintenance
         b_IN = calc_cash_value_factor(T, r_I, q)
 
-        # annuity of the operation-related costs
-        A_N_B = A_B1 * a * b_B + A_IN * a * b_IN
-#        print('A_N_B', A_N_B)
+        # annuity of the operation-related costs with negative sign applied
+        A_N_B = (A_B1 * a * b_B + A_IN * a * b_IN) * (-1)
 
         # Store values
-#        self.A_B1 = A_B1
-#        self.A_IN_1 = A_IN * b_IN
-#        self.A_IN_2 = A_IN * b_IN * a
         self.A_N_B = A_N_B
 
 
