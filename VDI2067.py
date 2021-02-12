@@ -144,7 +144,7 @@ def main_VDI_example():
                          index=['Wärme', 'Strom'])
 
     # Calculate the annuity of the energy system (with default r values)
-    q = 1.07  # interest factor
+    q = 1.07  # interest factor (which is an interest rate of 7 %)
     T = 30  # observation period
     A = sys.calc_annuities(T=T, q=q, df_V1=df_V1)  # Get Series of annuities
 
@@ -199,7 +199,7 @@ def main_database_example():
             index=['Erlös 1', 'Erlös 2', 'Erlös 3', 'Erlös 4', 'Erlös 5'])
 
     # Calculate the annuity of the energy system
-    q = 1.03  # interest factor
+    q = 1.03  # interest factor (which is an interest rate of 3 %)
     T = 20  # observation period
     sys.calc_annuities(T=T, q=q,
                        # r_all=1,
