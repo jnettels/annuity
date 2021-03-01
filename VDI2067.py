@@ -82,9 +82,10 @@ Deviations from the official calculations in VDI 2067:
 
 """
 
-import pandas as pd
 import logging
 import math
+import locale
+import pandas as pd
 
 # Define the logging function
 logger = logging.getLogger(__name__)
@@ -103,7 +104,7 @@ def main_VDI_example():
     logging.basicConfig(format='%(asctime)-15s %(message)s')
     logger.setLevel(level='DEBUG')  # Set a default level for the logger
 
-    sys = system()  # Create energy system to add components (parts) to
+    sys = System()  # Create energy system to add components (parts) to
 
     # Add part: Oil burner
     A_0 = 6045  # [€] purchase price
@@ -169,7 +170,7 @@ def main_database_example():
 
     path = 'Kostendatenbank.xlsx'
 
-    sys = system()
+    sys = System()
     sys.load_cost_db(path=path)
     # print(sys.cost_db)
 
@@ -220,10 +221,10 @@ def main_database_example():
     sys.calc_amortization(pprint=True)
 
 
-class system():
+class System():
     """Class representing the energy system.
 
-    Add ``part`` objects to the energy system to be able to perform the
+    Add ``Part`` objects to the energy system to be able to perform the
     economic calculation with ``calc_annuities()``.
     """
 
@@ -235,6 +236,8 @@ class system():
         self.T = 0  # observation period; set in calc_annuities()
         self.q = 1  # observation factor; set in calc_annuities()
         self.df_VSE = pd.DataFrame()  # demand, other, proc.; calc_annuities()
+        self.A_N_K_name = 'Capital-related costs'
+        self.A_N_B_name = 'Operation-related costs'
 
     def load_cost_db(self, path=r'Kostendatenbank.xlsx'):
         """Load a database with cost information.
@@ -252,7 +255,7 @@ class system():
 
     def add_part_db(self, technology, variant, component, size, fund=0,
                     raise_error=True):
-        r"""Add a ``part`` object to the energy system from the cost database.
+        r"""Add a ``Part`` object to the energy system from the cost database.
 
         Investment cost ``A_0`` is determined with the formula
 
@@ -291,27 +294,26 @@ class system():
         part_tuple = (technology, variant, component)
         try:
             df = self.cost_db.loc[part_tuple]
-        except pd.core.indexing.IndexingError:
+        except KeyError as ex:
             if raise_error:
                 if logger.isEnabledFor(logging.DEBUG):
                     print(self.cost_db)
-                raise IndexError(
-                        str(part_tuple) + ' not found in index of database')
+                raise IndexError('{} not found in index of database'
+                                 .format(part_tuple)) from ex
             else:
-                logger.error(
-                        str(part_tuple) + ' not found in index of database')
+                logger.error('%s not found in index of database', part_tuple)
                 return False
 
         a = df['Reg. Faktor']
         b = df['Reg. Exponent']
-        if 0 < size and size < df['Gültig min']:
-            logger.warning('Size of part '+str(part_tuple)+' is below '
-                           'boundary: '+str(size)+'<'+str(df['Gültig min'])
-                           + ' '+df['Bezugseinheit'])
+        if 0 < size < df['Gültig min']:
+            logger.warning('Size of part %s is below boundary: %s<%s %s',
+                           part_tuple, size, df['Gültig min'],
+                           df['Bezugseinheit'])
         elif size > df['Gültig max']:
-            logger.warning('Size of part '+str(part_tuple)+' is above '
-                           'boundary: '+str(size)+'>'+str(df['Gültig max'])
-                           + ' '+df['Bezugseinheit'])
+            logger.warning('Size of part %s is above boundary: %s<%s %s',
+                           part_tuple, size, df['Gültig max'],
+                           df['Bezugseinheit'])
 
         if size > 0:
             A_0 = a * pow(size, b) * size  # Investment amount [€]
@@ -332,7 +334,7 @@ class system():
 
     def add_part(self, name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=0,
                  size=None, unit=None):
-        """Create a new ``part`` object and add it to the list of parts.
+        """Create a new ``Part`` object and add it to the list of parts.
 
         The list of parts is contained in the energy system. The concept
         of funding (``fund``) is not part of the VDI 2067.
@@ -362,7 +364,7 @@ class system():
         Returns:
             None
         """
-        new_part = part(name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=fund,
+        new_part = Part(name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=fund,
                         size=size, unit=unit)
         self.parts.append(new_part)
 
@@ -373,15 +375,15 @@ class system():
         the energy system into one DataFrame.
         """
         s_list = []
-        for part_ in self.parts:
-            s = pd.Series(part_.__dict__)
+        for _part in self.parts:
+            s = pd.Series(_part.__dict__)
             s_list.append(s)
 
         if len(s_list) > 0:  # Normal use (the system contains parts)
             df = pd.concat(s_list, axis=1).T
 
         else:  # No parts: Create an empty DataFrame with the correct columns
-            fake_part = part('Empty', 0, 0, 0, 0, 0, 0)  # create empty part
+            fake_part = Part('Empty', 0, 0, 0, 0, 0, 0)  # create empty part
             df = pd.concat([pd.Series(fake_part.__dict__)], axis=1).T
             df.drop(0, inplace=True)  # Remove the row
 
@@ -495,9 +497,9 @@ class system():
                 r_K = r_B = r_I = r_all
 
         # Calculate capital and operation annuities for all components (parts)
-        for part in self.parts:
-            part.calc_annuity_capital(T, q, r_K)  # calc A_N_K
-            part.calc_annuity_operation(T, q, r_B, r_I, price_op)  # calc A_N_B
+        for _part in self.parts:
+            _part.calc_annuity_capital(T, q, r_K)  # calculate A_N_K
+            _part.calc_annuity_operation(T, q, r_B, r_I, price_op)  # A_N_B
 
         # Get a DataFrame used to calculate the sums of the annuities
         df_parts = self.list_parts()
@@ -550,9 +552,14 @@ class system():
         """
         try:
             df_r = df.pop('r')  # Remove r here to allow use of df.prod()
-        except KeyError:
+        except KeyError as ex:
             raise KeyError('The given DataFrame is missing a column "r" '
-                           'with the price change factor for each entry')
+                           'with the price change factor for each entry'
+                           ) from ex
+        if df_r.hasnans:
+            raise ValueError('The column "r" of the given DataFrame has '
+                             'missing values. Make sure to set the price '
+                             'change factor "r" for all entries')
         for idx in df.index:
             r = df_r.loc[idx]
 
@@ -665,12 +672,11 @@ class system():
 
     def f_space(self, x):
         """Format and return a float with space as thousands separator."""
-        import locale
         locale.setlocale(locale.LC_ALL, '')
         return locale.format_string('%14.2f', x, grouping=True)
 
 
-class part():
+class Part():
     """Representation of a component of an energy system.
 
     Stores all properties of the component and can calculate its own
@@ -829,10 +835,10 @@ def calc_annuity_factor(T, q):
     else:
         try:
             a = (q-1) / (1-pow(q, -T))  # annuity factor
-        except ZeroDivisionError:
+        except ZeroDivisionError as ex:
             raise ValueError('Cannot calculate annuity factor from observation'
-                             ' period T=' + str(T) + ' years and interest '
-                             'factor q=' + str(q))
+                             ' period T={} years and interest '
+                             'factor q={}'.format(T, q)) from ex
     return a
 
 
@@ -863,8 +869,7 @@ def calc_cash_value_factor(T, r, q):
 
 
 if __name__ == "__main__":
-    """If this imported as a module, this part will be skipped.
-    If this script is executed directly, we call our main method from here.
-    """
+    # If this imported as a module, this part will be skipped.
+    # If this script is executed directly, we call our main method from here.
     main_VDI_example()
     # main_database_example()
