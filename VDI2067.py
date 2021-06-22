@@ -92,7 +92,7 @@ logger = logging.getLogger(__name__)
 
 
 def main_VDI_example():
-    """Run the maain VDI example.
+    """Run the main VDI example.
 
     This main method implements the example from VDI 2067 Annex B.
     A small difference between the results may result from rounding.
@@ -128,7 +128,7 @@ def main_VDI_example():
     sys.add_part('tank', 950, 25, 0.015, 0, 0)
     sys.add_part('smokestack', 2500, 50, 0.03, 0, 0)
     sys.add_part('smokestack con.', 100, 50, 0.03, 0, 0)
-    sys.add_part('boilder assembly', 633, 20, 0.0, 0, 0)
+    sys.add_part('boiler assembly', 633, 20, 0.0, 0, 0)
     sys.add_part('circ. pump inst.', 250, 10, 0.03, 0, 0)
     sys.add_part('piping for circ.', 1920, 30, 0.02, 0, 0)
     sys.add_part('piping insulation', 684, 20, 0.01, 0, 0)
@@ -485,9 +485,11 @@ class System():
             | Proceeds              | Heat        | 15000    | 0.30  | 1.04 |
             +-----------------------+-------------+----------+-------+------+
 
-            A_N_K_name (str, optional): Name for 'Capital-related costs'
+            A_N_K_name (str, optional): Name for 'Capital-related costs'.
+            If ``None``, skip output of capital-related costs.
 
             A_N_B_name (str, optional): Name for 'Operation-related costs'
+            If ``None``, skip output of operation-related costs.
 
         Returns:
             A (Pandas Series): Series of all annuities
@@ -505,8 +507,11 @@ class System():
         df_parts = self.list_parts()
 
         # Create a Series of all annuities
-        self.A = pd.Series({A_N_K_name: df_parts['A_N_K'].sum(),
-                            A_N_B_name: df_parts['A_N_B'].sum()})
+        self.A = pd.Series()
+        if A_N_K_name is not None:  # If None, skip output
+            self.A[A_N_K_name] = df_parts['A_N_K'].sum()
+        if A_N_B_name is not None:  # If None, skip output
+            self.A[A_N_B_name] = df_parts['A_N_B'].sum()
 
         if r_all is not None:  # Overwrite all other r_* values at once
             if r_all >= 0:
