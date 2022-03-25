@@ -248,7 +248,7 @@ class System():
         db = pd.read_excel(path, sheet_name='Regressionen',
                            index_col=[0, 1, 2], header=0)
         factors = pd.read_excel(path, sheet_name='Konstanten', index_col=[0],
-                                header=0, usecols=[0, 1], squeeze=True)
+                                header=0, usecols=[0, 1]).squeeze("columns")
         self.cost_db = db
         self.factors = factors
         return db
@@ -507,7 +507,7 @@ class System():
         df_parts = self.list_parts()
 
         # Create a Series of all annuities
-        self.A = pd.Series()
+        self.A = pd.Series(dtype='object')
         if A_N_K_name is not None:  # If None, skip output
             self.A[A_N_K_name] = df_parts['A_N_K'].sum()
         if A_N_B_name is not None:  # If None, skip output
@@ -521,7 +521,7 @@ class System():
         if len(df_VSE) > 0:
             self.df_VSE = self.calc_annuity_cost_template(T, q, df_VSE)
             df_VSE_grouped = self.df_VSE.groupby(level=[0]).sum()
-            self.A = self.A.append(df_VSE_grouped['product'])
+            self.A = pd.concat([self.A, df_VSE_grouped['product']])
 
         self.T = T
         self.q = q
@@ -588,25 +588,45 @@ class System():
         return df
 
     def calc_amortization(self, pprint=False):
-        r"""Calculate the amortization time.
+        r"""Calculate the amortization time, including the residual value.
 
         .. note::
             This calculation is not part of VDI 2067.
 
         Amortization time is the total invest throughout the observation
-        period divided by the annual return on invest:
+        period ``T`` divided by the annual return on invest:
 
         .. math::
             t_{amort} = \frac{total\ invest}{return\ on\ invest}
             = \frac{-A_{N,K} * T}{A_N - A_{N,K}}
 
-        If the total annuity ``A_N`` is zero, the amortization time will be
-        equal to the observation period ``T``.
+        The total invest includes the initial investments, the replacements
+        and the residual value. It is not a present/cash value, but this
+        works fine nonetheless.
+
+        If the total annuity :math:`A_N` is zero, the amortization time will be
+        equal to the observation period `T`. If ``return on invest`` is
+        equal zero or negative, amorisation is not possible and ``NaN`` is
+        returned.
+
+        For an alternative calculation with the same result,
+        divide the present value of the total invest by the mean
+        of all discounted "return on invest" annuities.
+        Here `a` is the annuity factor and `q` is the interest factor.
+
+        .. math::
+            t_{amort} = \frac{present\ value\ of\ total\ invest}
+            {mean\ of\ discounted\ return\ on\ invest}
+            = \frac{-A_{N,K} \cdot \frac{1}{a}}
+            {\overline{\sum_{i=1}^T{\frac{A_N - A_{N,K}}{(1+q)^i}}}}
+
+        Both approaches include the residual value. This leads to an early
+        amortisation compared to an approach where the residual value is
+        not included.
+
         """
         total_invest = self.A[self.A_N_K_name] * self.T * (-1)
         return_on_invest = self.A.sum() - self.A[self.A_N_K_name]
-
-        t_amort = total_invest / return_on_invest
 
         if return_on_invest > 0:
             t_amort = total_invest / return_on_invest
@@ -618,10 +638,30 @@ class System():
                 print('Amortization is not possible due to negative return '
                       'on invest')
 
+        # Just for reference, an implementation of the alternative formula:
+        # a = calc_annuity_factor(self.T, self.q)
+        # total_invest = self.A[self.A_N_K_name] * 1/a * (-1)
+        # return_on_invest = 0
+        # for i in range(1, int(self.T)+1):
+        #      r = (self.A.sum() - self.A[self.A_N_K_name]) / pow(self.q, i)
+        #      return_on_invest += r/self.T  # build sum and calculate mean
+        # t_amort_alt = total_invest / return_on_invest
+        # print(t_amort, t_amort_alt, t_amort-t_amort_alt)
+
         return t_amort
 
     def calc_NPV(self):
-        """Calculate net present value (Netto-Kapitalwert)."""
+        r"""Calculate net present value of the total annuity.
+
+        (German: Netto-Kapitalwert)
+
+        .. note::
+            This calculation is not part of VDI 2067.
+
+        .. math::
+            NPV = \frac{annuity}{annuity\ factor}
+            = \frac{A_N}{a}
+        """
         A = self.A.sum()  # sum of annuities
         a = calc_annuity_factor(self.T, self.q)
         NPV = A / a
@@ -634,7 +674,7 @@ class System():
         A = self.calc_investment()
         A_funding = self.calc_investment(include_funding=True)
 
-        pd.set_option('precision', 2)  # Set the number of decimal points
+        pd.set_option('display.precision', 2)  # Set number of decimal points
         pd.set_option('display.float_format', self.f_space)
         print('------------- List of parts -------------')
         print(df_parts.to_string())
@@ -643,34 +683,34 @@ class System():
         if A != A_funding:
             print('Investment after funding: ', self.f_space(A_funding))
         print('-----------------------------------------')
-        pd.reset_option('precision')  # ...and reset the setting from above
+        pd.reset_option('display.precision')  # ...reset the setting from above
         pd.reset_option('display.float_format')
 
         return df_parts
 
     def pprint_annuities(self):
         """Pretty print the annuities to the console."""
-        pd.set_option('precision', 2)  # Set the number of decimal points
+        pd.set_option('display.precision', 2)  # Set number of decimal points
         pd.set_option('display.float_format', self.f_space)
         print('--------------- Annuities ---------------')
         print(self.A.to_string())
         print('-----------------------------------------')
         print('Total annuity:            ', self.f_space(self.A.sum()))
         print('-----------------------------------------')
-        pd.reset_option('precision')  # ...and reset the setting from above
+        pd.reset_option('display.precision')  # ...reset the setting from above
         pd.reset_option('display.float_format')
 
         return self.A
 
     def pprint_VSE(self):
         """Pretty-print operation, demand and other costs to the console."""
-        pd.set_option('precision', 2)  # Set the number of decimal points
+        pd.set_option('display.precision', 2)  # Set number of decimal points
         pd.set_option('display.float_format', self.f_space)
         print('------------ Annuity details ------------')
         if not self.df_VSE.empty:
             print(self.df_VSE.to_string())
         print('-----------------------------------------')
-        pd.reset_option('precision')  # ...and reset the setting from above
+        pd.reset_option('display.precision')  # ...reset the setting from above
         pd.reset_option('display.float_format')
 
         return self.df_VSE
