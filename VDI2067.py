@@ -168,15 +168,13 @@ def main_database_example():
     logging.basicConfig(format='%(asctime)-15s %(message)s')
     logger.setLevel(level='INFO')  # Set a default level for the logger
 
-    path = 'Kostendatenbank.xlsx'
-
     sys = System()
-    sys.load_cost_db(path=path)
+    sys.load_cost_db()
     # print(sys.cost_db)
 
     fund = 0.5  # factor for funding
     sys.add_part_db('Photovoltaik', 'Dach', 'komplett', 5500)
-    sys.add_part_db('Heizzentrale', 'futureSuN', 'komplett', 1, fund=fund)
+    sys.add_part_db('Gebäude', 'Heizzentrale', 'komplett', 1, fund=fund)
     sys.add_part_db('Langzeitwärmespeicher', 'Behälter', 'komplett', 30900,
                     fund=fund)
     sys.add_part_db('Übergabestation', 'Fernwärme', 'komplett', 3954)
@@ -239,18 +237,58 @@ class System():
         self.A_N_K_name = 'Capital-related costs'
         self.A_N_B_name = 'Operation-related costs'
 
-    def load_cost_db(self, path=r'Kostendatenbank.xlsx'):
+    def load_cost_db(
+            self,
+            path=r'cost_database.xlsx',
+            sheet_regressions='Regressionen',
+            db_unit='Bezugseinheit',  # Reference unit name
+            db_reg_factor='Reg. Faktor',  # Factor a of regression a*x^b
+            db_reg_exp='Reg. Exponent',  # Exponent b of regression a*x^b
+            db_valid_min='Gültig min',  # Minimum validity of regression
+            db_valid_max='Gültig max',  # Maximum validity of regression
+            db_n_years='Nutzungsdauer',  # Depreciation period
+            db_f_maintain='Instandsetzung',  # Effort for maintenance
+            db_f_service='Wartung',  # Effort for servicing and inspection
+            db_f_operation='Bedienen',  # Effort for operation
+            ):
         """Load a database with cost information.
 
         This function, as well as ``add_part_db()`` expect a certain
         structure and column headers.
+
+        The first three columns are used as the index, categorizing all
+        entries into technologies, variants and components.
+
+        The other columns contain the data associated with each entry.
+        For maximum flexibility in use (e.g. different languages),
+        the names of the column headers can be given as input arguments.
+
+        Args:
+            path (str): Path to a compatible Excel file
+
+            sheet_regressions (str): Name of target sheet in Excel file
+
+            db_* (str): Definitions of the used column names
+
+        Returns:
+            db (DataFrame): A DataFrame representation of the loaded database
+
         """
-        db = pd.read_excel(path, sheet_name='Regressionen',
+        db = pd.read_excel(path, sheet_name=sheet_regressions,
                            index_col=[0, 1, 2], header=0)
-        factors = pd.read_excel(path, sheet_name='Konstanten', index_col=[0],
-                                header=0, usecols=[0, 1]).squeeze("columns")
         self.cost_db = db
-        self.factors = factors
+
+        # Definition of the column header names used in add_part_db()
+        self.db_unit = db_unit  # Reference unit name
+        self.db_reg_factor = db_reg_factor  # Factor a of regression a*x^b
+        self.db_reg_exp = db_reg_exp  # Exponent b of regression a*x^b
+        self.db_valid_min = db_valid_min  # Minimum validity of regression
+        self.db_valid_max = db_valid_max  # Maximum validity of regression
+        self.db_n_years = db_n_years  # Depreciation period
+        self.db_f_maintain = db_f_maintain  # Effort for maintenance
+        self.db_f_service = db_f_service  # Effort for servicing and inspection
+        self.db_f_operation = db_f_operation  # Effort for operation
+
         return db
 
     def add_part_db(self, technology, variant, component, size, fund=0,
@@ -304,32 +342,32 @@ class System():
                 logger.error('%s not found in index of database', part_tuple)
                 return False
 
-        a = df['Reg. Faktor']
-        b = df['Reg. Exponent']
-        if 0 < size < df['Gültig min']:
+        a = df[self.db_reg_factor]
+        b = df[self.db_reg_exp]
+        if 0 < size < df[self.db_valid_min]:
             logger.warning('Size of part %s is below boundary: %s<%s %s',
                            part_tuple, size, df['Gültig min'],
                            df['Bezugseinheit'])
-        elif size > df['Gültig max']:
+        elif size > df[self.db_valid_max]:
             logger.warning('Size of part %s is above boundary: %s<%s %s',
                            part_tuple, size, df['Gültig max'],
                            df['Bezugseinheit'])
 
         if size > 0:
             A_0 = a * pow(size, b) * size  # Investment amount [€]
-            f_Op = df['Bedienen']  # Effort for operation [h/a]
+            f_Op = df[self.db_f_operation]  # Effort for operation [h/a]
 
         else:  # Allows placeholder parts that have no actual costs
             A_0 = 0
             f_Op = 0
 
-        T_N = df['Nutzungsdauer']  # service life (in years)
-        f_Inst = df['Instandsetzung']  # Effort for maintenance
-        f_W_Insp = df['Wartung']  # Effort for servicing and inspection
+        T_N = df[self.db_n_years]  # service life (in years)
+        f_Inst = df[self.db_f_maintain]  # Effort for maintenance
+        f_W_Insp = df[self.db_f_service]  # Effort for servicing and inspection
 
         part_str = ', '.join(part_tuple)
         self.add_part(part_str, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=fund,
-                      size=size, unit=df['Bezugseinheit'])
+                      size=size, unit=df[self.db_unit])
         return True
 
     def add_part(self, name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=0,
@@ -368,11 +406,20 @@ class System():
                         size=size, unit=unit)
         self.parts.append(new_part)
 
-    def list_parts(self):
+    def list_parts(self, idx_number='Nr.', idx_name='Name'):
         """Return a list of all parts in the energy system.
 
         Combine properties and all calculated values from the parts of
         the energy system into one DataFrame.
+
+        Args:
+            idx_number (str): Name given to the first index level of df
+
+            idx_name (str): Name given to the second index level of df
+
+        Returns:
+            df (DataFrame): A DataFrame with a list of all components
+
         """
         s_list = []
         for _part in self.parts:
@@ -388,6 +435,7 @@ class System():
             df.drop(0, inplace=True)  # Remove the row
 
         df.set_index(keys='name', append=True, inplace=True)
+        df.index.set_names([idx_number, idx_name], inplace=True)
         return df
 
     def calc_investment(self, include_funding=False):
