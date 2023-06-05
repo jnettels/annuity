@@ -1,0 +1,41 @@
+{% set data = load_setup_py_data() %}
+
+package:
+  name: annuity
+  version: {{ data['version'] }}
+
+source:
+    path: ..
+
+build:
+  number: {{ GIT_DESCRIBE_NUMBER }}
+
+  script: pip install .
+
+  noarch: python
+
+  preserve_egg_dir: True
+
+requirements:
+    build:
+        - python
+        - setuptools
+        - setuptools_scm
+        - pandas
+
+    run:
+        - python
+        - pandas
+
+test:
+  source_files:
+    - annuity/examples/cost_database.xlsx
+
+about:
+    home: https://github.com/jnettels/annuity
+    summary: 'Calculation of economic efficiency using the annuity method'
+    description: 'Calculation of economic efficiency using the annuity method'
+    license: 'MIT'
+    license_file: LICENSE
+    author: 'Joris Zimmermann'
+    author_email: 'joris.zimmermann@stw.de'
