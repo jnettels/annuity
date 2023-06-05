@@ -1,5 +1,5 @@
-VDI 2067
-================
+Annuity
+=======
 This is an implementation of the calculation of economic efficiency
 using the annuity method defined in the German VDI 2067.
 
