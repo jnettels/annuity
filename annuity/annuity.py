@@ -15,7 +15,7 @@
 
 """Calculation of economic efficiency using the VDI 2067 annuity method.
 
-VDI 2067
+Annuity
 ========
 This is an implementation of the calculation of economic efficiency
 using the annuity method defined in the German VDI 2067.
@@ -82,6 +82,7 @@ Deviations from the official calculations in VDI 2067:
 
 """
 
+import os
 import logging
 import math
 import locale
@@ -91,7 +92,7 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 
-def main_VDI_example():
+def main_VDI_example(pprint=True):
     """Run the main VDI example.
 
     This main method implements the example from VDI 2067 Annex B.
@@ -149,27 +150,39 @@ def main_VDI_example():
     T = 30  # observation period
     A = sys.calc_annuities(T=T, q=q, df_VSE=df_VSE)  # Series of annuities
 
-    sys.pprint_parts()  # pretty-print a list of all parts of the system
-    sys.pprint_annuities()  # pretty-print the annuities
-    sys.pprint_VSE()
-    A_VDI_example = -5633.44  # Result of total annuity in official example
-    diff = A.sum() - A_VDI_example
-    print('Difference to VDI Example:', round(diff, 5), '€ (',
-          round(diff/A_VDI_example*100), '%)')
+    if pprint:
+        sys.pprint_parts()  # pretty-print a list of all parts of the system
+        sys.pprint_annuities()  # pretty-print the annuities
+        sys.pprint_VSE()
+
+        A_VDI_example = -5633.44  # Result of total annuity in official example
+        diff = A.sum() - A_VDI_example
+        print('Difference to VDI Example:', round(diff, 5), '€ (',
+              round(diff/A_VDI_example*100), '%)')
+
+    return A.sum()
 
 
-def main_database_example():
+def main_database_example(pprint=True):
     """Run the main database example.
 
     Main function that shows an example for loading the parts of the
     energy system from a database.
     """
+    import pkg_resources  # requires setuptools
+
     # Define output format of logging function
     logging.basicConfig(format='%(asctime)-15s %(message)s')
     logger.setLevel(level='INFO')  # Set a default level for the logger
 
     sys = System()
-    sys.load_cost_db()
+
+    # For the 'noarch' conda build, the following files have to be accessed
+    # not from a regular file path, but as a pkg resources object
+    resource = pkg_resources.resource_stream(
+        'annuity', os.path.join('examples', 'cost_database.xlsx'))
+    with resource as path:
+        sys.load_cost_db(path=path)
     # print(sys.cost_db)
 
     fund = 0.5  # factor for funding
@@ -207,16 +220,19 @@ def main_database_example():
     # Calculate the annuity of the energy system
     q = 1.03  # interest factor (which is an interest rate of 3 %)
     T = 20  # observation period
-    sys.calc_annuities(T=T, q=q, df_VSE=df_VSE)  # Series of annuities
+    A = sys.calc_annuities(T=T, q=q, df_VSE=df_VSE)  # Series of annuities
 
-    sys.pprint_parts()  # convenience function
-    sys.pprint_annuities()  # convenience function
-    sys.pprint_VSE()
+    if pprint:
+        sys.pprint_parts()  # convenience function
+        sys.pprint_annuities()  # convenience function
+        sys.pprint_VSE()
 
-    sys.calc_investment()
-    sys.calc_investment(include_funding=True)
+        sys.calc_investment()
+        sys.calc_investment(include_funding=True)
 
-    sys.calc_amortization(pprint=True)
+        sys.calc_amortization(pprint=True)
+
+    return A.sum()
 
 
 class System():
