@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-VDI2067
-=======
-Setup for the package ``VDI2067``, based on the German VDI 2067:
+"""Define setup for the package ``annuity``, based on the German VDI 2067.
 
     **VDI 2067, Part 1**
 
@@ -11,29 +8,24 @@ Setup for the package ``VDI2067``, based on the German VDI 2067:
     **Fundamentals and economic calculation**
 
     *September 2012 (ICS 91.140.01)*
-
-To install, run the following command:
-
-.. code::
-
-    python setup.py install
-
-You can then import the module with:
-
-.. code::
-
-    import VDI2067
-
 """
-
 from setuptools import setup
+from setuptools_scm import get_version
 
-setup(name='VDI2067',
-      version='0.1.0',
-      description='VDI 2067: Calculation of economic efficiency using the annuity method',
+
+try:
+    version = get_version(version_scheme='post-release')
+except LookupError:
+    version = '0.0.0'
+    print('Warning: setuptools-scm requires an intact git repository to detect'
+          ' the version number for this build.')
+
+setup(name='annuity',
+      version=version,
+      description='Calculation of economic efficiency using the annuity method',
       long_description=open('README.md').read(),
-      author='Joris Nettelstroth',
-      author_email='joris.nettelstroth@stw.de',
-      url='https://github.com/jnettels/VDI2067',
-      py_modules=['VDI2067'],
+      license='MIT',
+      author='Joris Zimmermann',
+      author_email='joris.zimmermann@stw.de',
+      url='https://github.com/jnettels/annuity',
       )
