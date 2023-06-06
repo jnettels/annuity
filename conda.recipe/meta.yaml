@@ -1,20 +1,20 @@
 {% set data = load_setup_py_data() %}
 
 package:
-  name: annuity
-  version: {{ data['version'] }}
+    name: annuity
+    version: {{ data['version'] }}
 
 source:
     path: ..
 
 build:
-  number: {{ GIT_DESCRIBE_NUMBER }}
+    number: {{ GIT_DESCRIBE_NUMBER }}
 
-  script: pip install .
+    script: pip install .
 
-  noarch: python
+    noarch: python
 
-  preserve_egg_dir: True
+    preserve_egg_dir: True
 
 requirements:
     build:
@@ -28,8 +28,10 @@ requirements:
         - pandas
 
 test:
-  source_files:
-    - annuity/examples/cost_database.xlsx
+    requires:
+       - openpyxl
+    source_files:
+       - annuity/examples/cost_database.xlsx
 
 about:
     home: https://github.com/jnettels/annuity
