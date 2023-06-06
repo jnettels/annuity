@@ -28,4 +28,12 @@ setup(name='annuity',
       author='Joris Zimmermann',
       author_email='joris.zimmermann@stw.de',
       url='https://github.com/jnettels/annuity',
+      python_requires='>=3.7',
+      install_requires=[
+          'pandas',
+      ],
+      packages=['annuity'],
+      package_data={
+        'annuity': ['examples/cost_database.xlsx'],
+        },
       )
