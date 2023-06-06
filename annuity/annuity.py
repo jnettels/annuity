@@ -584,8 +584,8 @@ class System():
         # Calculate demand, "other costs" and proceeds for the whole system
         if len(df_VSE) > 0:
             self.df_VSE = self.calc_annuity_cost_template(T, q, df_VSE)
-            df_VSE_grouped = self.df_VSE.groupby(level=[0]).sum()
-            self.A = pd.concat([self.A, df_VSE_grouped['product']])
+            df_VSE_grouped = self.df_VSE['product'].groupby(level=[0]).sum()
+            self.A = pd.concat([self.A, df_VSE_grouped])
 
         self.T = T
         self.q = q
