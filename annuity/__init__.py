@@ -1,4 +1,4 @@
-"""Initialize the package and define version."""
+"""Calculation of economic efficiency using the VDI 2067 annuity method."""
 from pkg_resources import get_distribution, DistributionNotFound
 
 try:
