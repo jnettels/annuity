@@ -169,7 +169,7 @@ def main_database_example(pprint=True):
     Main function that shows an example for loading the parts of the
     energy system from a database.
     """
-    import pkg_resources  # requires setuptools
+    import importlib.resources
 
     # Define output format of logging function
     logging.basicConfig(format='%(asctime)-15s %(message)s')
@@ -178,10 +178,10 @@ def main_database_example(pprint=True):
     sys = System()
 
     # For the 'noarch' conda build, the following files have to be accessed
-    # not from a regular file path, but as a pkg resources object
-    resource = pkg_resources.resource_stream(
-        'annuity', os.path.join('examples', 'cost_database.xlsx'))
-    with resource as path:
+    # not from a regular file path, but as a resources object
+    res_path = importlib.resources.files('annuity').joinpath(
+        os.path.join('examples', 'cost_database.xlsx'))
+    with importlib.resources.as_file(res_path) as path:
         sys.load_cost_db(path=path)
     # print(sys.cost_db)
 
@@ -571,7 +571,7 @@ class System():
         df_parts = self.list_parts()
 
         # Create a Series of all annuities
-        self.A = pd.Series(dtype='object')
+        self.A = pd.Series(dtype='float')
         if A_N_K_name is not None:  # If None, skip output
             self.A[A_N_K_name] = df_parts['A_N_K'].sum()
         if A_N_B_name is not None:  # If None, skip output
