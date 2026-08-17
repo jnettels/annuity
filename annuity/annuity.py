@@ -308,7 +308,7 @@ class System():
         return db
 
     def add_part_db(self, technology, variant, component, size, fund=0,
-                    raise_error=True):
+                    raise_error=True, alias=None):
         r"""Add a ``Part`` object to the energy system from the cost database.
 
         Investment cost ``A_0`` is determined with the formula
@@ -381,13 +381,19 @@ class System():
         f_Inst = df[self.db_f_maintain]  # Effort for maintenance
         f_W_Insp = df[self.db_f_service]  # Effort for servicing and inspection
 
-        part_str = ', '.join(part_tuple)
+        if alias is None:
+            part_str = ', '.join(part_tuple)
+        else:
+            part_str = alias
+
         self.add_part(part_str, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=fund,
-                      size=size, unit=df[self.db_unit])
+                      size=size, unit=df[self.db_unit],
+                      reg_factor=a, reg_exp=b,
+                      )
         return True
 
     def add_part(self, name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=0,
-                 size=None, unit=None):
+                 **kwargs):
         """Create a new ``Part`` object and add it to the list of parts.
 
         The list of parts is contained in the energy system. The concept
@@ -410,16 +416,18 @@ class System():
             fund (float): Factor for funding of investment amount in first
             year (``fund=0``: no funding, ``fund=1``: 100% funding)
 
-            size (float): Size of the part when loaded from
-            database (optional). Default = None.
+            **kwargs: Additional attributes to store in the part, e.g.:
 
-            unit (str): Unit corresponding to size (optional)
+                size (float): Size of the part when loaded from
+                database (optional)
+
+                unit (str): Unit corresponding to size (optional)
 
         Returns:
             None
         """
         new_part = Part(name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=fund,
-                        size=size, unit=unit)
+                        **kwargs)
         self.parts.append(new_part)
 
     def list_parts(self, idx_number='Nr.', idx_name='Name'):
@@ -437,6 +445,12 @@ class System():
             df (DataFrame): A DataFrame with a list of all components
 
         """
+        def to_numeric_safe(s):
+            try:
+                return pd.to_numeric(s, errors='raise')
+            except ValueError:
+                return s
+
         s_list = []
         for _part in self.parts:
             s = pd.Series(_part.__dict__)
@@ -452,6 +466,8 @@ class System():
 
         df.set_index(keys='name', append=True, inplace=True)
         df.index.set_names([idx_number, idx_name], inplace=True)
+
+        df = df.map(to_numeric_safe)
         return df
 
     def calc_investment(self, include_funding=False):
@@ -793,16 +809,18 @@ class Part():
     """
 
     def __init__(self, name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=0,
-                 size=None, unit=None):
+                 **kwargs):
         self.name = name  # Name of the component
-        self.size = size  # Size of the part when loaded from database
-        self.unit = unit  # Unit corresponding to size
         self.A_0 = A_0  # Investment amount [€]
         self.T_N = T_N  # service life (in years)
         self.f_Inst = f_Inst  # Effort for maintenance
         self.f_W_Insp = f_W_Insp  # Effort for servicing and inspection
         self.f_Op = f_Op  # Effort for operation [h/a]
         self.fund = fund  # factor for funding
+
+        # Store additional attributes
+        for key, value in kwargs.items():
+            self.__dict__[key] = value
 
         # To be calculated by calc_annuity_capital()
         self.A = []  # list of cash values for all procured replacements
