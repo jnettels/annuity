@@ -1,5 +1,6 @@
 *.py[cod]
 __pycache__
+*.xlsx
 
 # C extensions
 *.so
@@ -23,6 +24,8 @@ lib64
 venv*/
 pyvenv*/
 pip-wheel-metadata/
+
+.vscode
 
 # Installer logs
 pip-log.txt

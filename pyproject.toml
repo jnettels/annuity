@@ -1,0 +1,45 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "annuity"
+dynamic = ["version"]
+description = "Calculation of economic efficiency using the annuity method"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [
+    {name = "Joris Zimmermann", email = "joris.zimmermann@stw.de"}
+]
+keywords = ["annuity", "economic efficiency", "VDI 2067"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+dependencies = [
+    "pandas",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7.0", "pytest-cov", "tox>=3.0"]
+excel = ["openpyxl"]
+
+[project.urls]
+Homepage = "https://github.com/jnettels/annuity"
+Repository = "https://github.com/jnettels/annuity.git"
+
+[tool.flit.module]
+name = "annuity"
+path = "src"
+
+[tool.flit.sdist]
+include = [
+    "tests/files/cost_database.xlsx",
+]

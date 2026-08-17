@@ -82,7 +82,6 @@ Deviations from the official calculations in VDI 2067:
 
 """
 
-import os
 import copy
 import logging
 import math
@@ -101,6 +100,7 @@ class System():
     """
 
     def __init__(self):
+        """Initialize annuity system."""
         self.cost_db = None  # Cost database; set by load_cost_db()
         self.factors = None  # Constant factors; set by load_cost_db()
         self.parts = []  # List of part objects in system; set by add_parts()
@@ -112,7 +112,6 @@ class System():
         self.A_N_B_name = 'Operation-related costs'
 
         self.load_cost_db()  # Initialize cost Database settings
-
 
     def __repr__(self):
         """Return a string representation of the system.
@@ -732,6 +731,7 @@ class Part():
 
     def __init__(self, name, A_0, T_N, f_Inst, f_W_Insp, f_Op, fund=0,
                  **kwargs):
+        """Initialize system part."""
         self.name = name  # Name of the component
         self.A_0 = A_0  # Investment amount [€]
         self.T_N = T_N  # service life (in years)

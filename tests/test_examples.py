@@ -1,3 +1,4 @@
+"""Test of examples for annuity."""
 import os
 import pandas as pd
 import logging
@@ -86,21 +87,14 @@ def main_database_example(pprint=True):
     Main function that shows an example for loading the parts of the
     energy system from a database.
     """
-    import importlib.resources
-
     # Define output format of logging function
     logging.basicConfig(format='%(asctime)-15s %(message)s')
     logger.setLevel(level='INFO')  # Set a default level for the logger
 
     sys = annuity.System()
 
-    # For the 'noarch' conda build, the following files have to be accessed
-    # not from a regular file path, but as a resources object
-    res_path = importlib.resources.files('annuity').joinpath(
-        os.path.join('../..', 'tests', 'files', 'cost_database.xlsx'))
-    with importlib.resources.as_file(res_path) as path:
-        sys.load_cost_db(path=path)
-    # print(sys.cost_db)
+    sys.load_cost_db(path=os.path.join(
+        os.path.dirname(__file__), 'files', 'cost_database.xlsx'))
 
     fund = 0.5  # factor for funding
     sys.add_part_db('Photovoltaik', 'Dach', 'komplett', 5500)
@@ -153,7 +147,7 @@ def main_database_example(pprint=True):
 
 
 class TestMethods(unittest.TestCase):
-    """Defines tests."""
+    """Define tests."""
 
     def test_vdi_example(self):
         """Test the calculated total annuity."""
@@ -164,6 +158,7 @@ class TestMethods(unittest.TestCase):
         """Test the calculated total annuity."""
         self.assertAlmostEqual(main_database_example(pprint=False),
                                -8.4087763815)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -3,9 +3,9 @@ name: Python Jobs
 on: [push, pull_request]
 
 jobs:
-  job_1:
+  test:
     runs-on: ${{ matrix.os }}
-    name: Build
+    name: Test Python ${{ matrix.python-version }} on ${{ matrix.os }}
     strategy:
       fail-fast: false  # complete remaining jobs
       matrix:
@@ -14,34 +14,28 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v1  # use the latest code commit
-
-    - name: Setup conda with python ${{ matrix.python-version }}
-      uses: s-weigand/setup-conda@v1
+      uses: actions/checkout@v4
       with:
-        update-conda: false
+        fetch-depth: 0  # Fetch all history for version detection with setuptools_scm
+
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v5
+      with:
         python-version: ${{ matrix.python-version }}
 
-    - name: Add conda defaults channel
-      run: conda config --add channels defaults
-
-    - name: Initialize powershell for conda (Windows only)
-      if: runner.os == 'Windows'
-      run: conda init powershell
-
-    - name: Install dependencies with conda
+    - name: Install tox and dependencies
       run: |
-        conda install conda-build setuptools setuptools_scm
+        python -m pip install --upgrade pip tox tox-gh-actions
 
-    - name: Build with conda
+    - name: Run tests with tox
       run: |
-        conda build conda.recipe -c defaults
+        tox -e py$(echo ${{ matrix.python-version }} | tr -d '.')
 
     - name: Lint with flake8
-      if: runner.os == 'Linux'  # Only needs to run once
+      if: runner.os == 'Linux' && matrix.python-version == '3.13'
       run: |
-        conda install flake8
+        pip install flake8 flake8-docstrings
         # stop the build if there are Python syntax errors or undefined names
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        flake8 src/annuity/ tests/ --count --select=E9,F63,F7,F82 --show-source --statistics
         # exit-zero treats all errors as warnings. The GitHub editor is 127 chars wide
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+        flake8 src/annuity/ tests/ --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics

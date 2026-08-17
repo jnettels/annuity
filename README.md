@@ -62,3 +62,18 @@ Deviations from the official calculations in VDI 2067:
   Investment for all following replacements are not affected, they have to
   be paid in full. This does also not affect the operation-related costs.
   They are always calculated with the original investment amount ``A_0``.
+
+
+Installation
+------------
+
+Installation via ``pip``:
+```
+pip install "annuity @ https://github.com/jnettels/annuity/archive/main.tar.gz"
+```
+(This package is not yet published on pypi.)
+
+Installation via ``Anaconda``:
+```
+conda install annuity -c jnettels
+```

@@ -1,8 +1,6 @@
-{% set data = load_setup_py_data() %}
-
 package:
     name: annuity
-    version: {{ data['version'] }}
+    version: {{ GIT_DESCRIBE_TAG }}
 
 source:
     path: ..
@@ -19,7 +17,7 @@ build:
 requirements:
     build:
         - python
-        - setuptools_scm
+        - flit-core
         - pandas
 
     run:
@@ -29,8 +27,10 @@ requirements:
 test:
     requires:
        - openpyxl
+    commands:
+       - python tests/test_examples.py
     source_files:
-       - annuity/examples/cost_database.xlsx
+       - tests/
 
 about:
     home: https://github.com/jnettels/annuity
