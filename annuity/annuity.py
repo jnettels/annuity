@@ -83,6 +83,7 @@ Deviations from the official calculations in VDI 2067:
 """
 
 import os
+import copy
 import logging
 import math
 import locale
@@ -252,6 +253,68 @@ class System():
         self.df_VSE = pd.DataFrame()  # demand, other, proc.; calc_annuities()
         self.A_N_K_name = 'Capital-related costs'
         self.A_N_B_name = 'Operation-related costs'
+
+        self.load_cost_db()  # Initialize cost Database settings
+
+
+    def __repr__(self):
+        """Return a string representation of the system.
+
+        Shows number of parts, observation period, interest factor,
+        calculation status, and cost database status.
+        """
+        n_parts = len(self.parts)
+        is_calculated = self.A is not None
+        status = "calculated" if is_calculated else "not calculated"
+        db_loaded = "loaded" if self.cost_db is not None else "not loaded"
+
+        return (f"System(parts={n_parts}, T={self.T} years, q={self.q}, "
+                f"Status: {status}, Cost Database: {db_loaded})")
+
+    def copy(self):
+        """Create a shallow copy of the system."""
+        return copy.copy(self)
+
+    def __copy__(self):
+        """Create a shallow copy of the system.
+
+        The new system has its own parts list and DataFrames,
+        but references the same Part objects and database references.
+        """
+        new_sys = System()
+
+        new_sys.cost_db = self.cost_db  # Shared reference to DataFrame
+        new_sys.factors = self.factors
+        new_sys.parts = copy.copy(self.parts)  # Shallow copy of list
+        new_sys.A = self.A.copy() if self.A is not None else None
+        new_sys.T = self.T
+        new_sys.q = self.q
+        new_sys.df_VSE = self.df_VSE.copy()  # Pandas DataFrame copy
+        new_sys.A_N_K_name = self.A_N_K_name
+        new_sys.A_N_B_name = self.A_N_B_name
+
+        return new_sys
+
+    def __deepcopy__(self, memo):
+        """Create a deep copy of the System.
+
+        All parts are independently copied, so modifications to the copy
+        do not affect the original system.
+        """
+        new_sys = System()
+
+        new_sys.cost_db = copy.deepcopy(self.cost_db, memo)
+        new_sys.factors = copy.deepcopy(self.factors, memo)
+        new_sys.parts = [copy.deepcopy(part, memo) for part in self.parts]
+        new_sys.A = self.A.copy() if self.A is not None else None
+        new_sys.T = self.T
+        new_sys.q = self.q
+        new_sys.df_VSE = self.df_VSE.copy()
+        new_sys.A_N_K_name = self.A_N_K_name
+        new_sys.A_N_B_name = self.A_N_B_name
+
+        memo[id(self)] = new_sys
+        return new_sys
 
     def load_cost_db(
             self,
