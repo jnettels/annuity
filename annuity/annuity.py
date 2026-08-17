@@ -255,7 +255,7 @@ class System():
 
     def load_cost_db(
             self,
-            path=r'cost_database.xlsx',
+            path=None,
             sheet_regressions='Regressionen',
             db_unit='Bezugseinheit',  # Reference unit name
             db_reg_factor='Reg. Faktor',  # Factor a of regression a*x^b
@@ -290,9 +290,11 @@ class System():
             db (DataFrame): A DataFrame representation of the loaded database
 
         """
-        db = pd.read_excel(path, sheet_name=sheet_regressions,
-                           index_col=[0, 1, 2], header=0)
-        self.cost_db = db
+        if path is not None:
+            self.cost_db = pd.read_excel(path, sheet_name=sheet_regressions,
+                                         index_col=[0, 1, 2], header=0)
+        else:
+            self.cost_db = None
 
         # Definition of the column header names used in add_part_db()
         self.db_unit = db_unit  # Reference unit name
@@ -305,7 +307,7 @@ class System():
         self.db_f_service = db_f_service  # Effort for servicing and inspection
         self.db_f_operation = db_f_operation  # Effort for operation
 
-        return db
+        return self.cost_db
 
     def add_part_db(self, technology, variant, component, size, fund=0,
                     raise_error=True, alias=None):
